@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Agent Arena 观战视觉回归预览</title>
+  <link rel="stylesheet" href="../../main/resources/static/styles.css">
+  <link rel="stylesheet" href="../../main/resources/static/flow.css">
+</head>
+<body>
+  <main id="watch-page" class="page active"><div class="watch-shell"></div></main>
+  <div id="toast"></div>
+  <script>
+    window.scrollTo = () => {};
+    window.fetch = async () => { throw new Error('visual preview'); };
+    window.EventSource = class { close() {} };
+  </script>
+  <script src="../../main/resources/static/app.js"></script>
+  <script>
+    const werewolfPlayers = [
+      { id: 1, seatNo: 1, displayName: '推理者·北辰', roleCode: 'SEER', status: 'ALIVE', seerChecks: { 6: true } },
+      { id: 2, seatNo: 2, displayName: '观察者·白露', roleCode: 'VILLAGER', status: 'ALIVE' },
+      { id: 3, seatNo: 3, displayName: '守序者·青禾', roleCode: 'GUARD', status: 'ALIVE' },
+      { id: 4, seatNo: 4, displayName: '博弈者·长风', roleCode: 'WEREWOLF', status: 'ALIVE' },
+      { id: 5, seatNo: 5, displayName: '分析者·镜湖', roleCode: 'WITCH', status: 'ALIVE', antidoteAvailable: false, poisonAvailable: true },
+      { id: 6, seatNo: 6, displayName: '潜伏者·玄夜', roleCode: 'WEREWOLF', status: 'ALIVE' },
+      { id: 7, seatNo: 7, displayName: '记录者·星野', roleCode: 'VILLAGER', status: 'ELIMINATED' },
+      { id: 8, seatNo: 8, displayName: '直觉者·南枝', roleCode: 'VILLAGER', status: 'ALIVE' }
+    ];
+    const werewolfEvents = [
+      { sequenceNo: 41, eventType: 'AI_DECISION', actorPlayerId: 1, roundNo: 3, phase: 'DAY_DISCUSSION', payload: { summary: '昨夜信息与投票轨迹存在矛盾。', confidence: 78, source: 'MODEL' } },
+      { sequenceNo: 42, eventType: 'PLAYER_SPOKE', actorPlayerId: 1, roundNo: 3, phase: 'DAY_DISCUSSION', payload: { message: '4号和6号的投票关系很不自然，我建议这一轮优先验证4号。' } },
+      { sequenceNo: 43, eventType: 'AI_DECISION', actorPlayerId: 2, roundNo: 3, phase: 'DAY_VOTE', payload: { targetPlayerId: 4, summary: '跟随可信信息位。', confidence: 66, source: 'MODEL' } },
+      { sequenceNo: 44, eventType: 'PLAYER_VOTED', actorPlayerId: 2, roundNo: 3, phase: 'DAY_VOTE', payload: { targetPlayerId: 4 } },
+      { sequenceNo: 45, eventType: 'AI_DECISION', actorPlayerId: 3, roundNo: 3, phase: 'DAY_VOTE', payload: { targetPlayerId: 4, summary: '4号发言前后冲突。', confidence: 71, source: 'MODEL' } },
+      { sequenceNo: 46, eventType: 'PLAYER_VOTED', actorPlayerId: 3, roundNo: 3, phase: 'DAY_VOTE', payload: { targetPlayerId: 4 } },
+      { sequenceNo: 47, eventType: 'AI_DECISION', actorPlayerId: 6, roundNo: 3, phase: 'DAY_VOTE', payload: { targetPlayerId: 1, summary: '反制强势信息位。', confidence: 61, source: 'MODEL' } },
+      { sequenceNo: 48, eventType: 'PLAYER_VOTED', actorPlayerId: 6, roundNo: 3, phase: 'DAY_VOTE', payload: { targetPlayerId: 1 } }
+    ];
+
+    const battlePlayers = [
+      { id: 11, seatNo: 1, displayName: '猎隼', status: 'ALIVE', region: 'A', health: 86, armor: 24, food: 5, water: 4, armed: true, weaponName: '战术步枪', weaponLevel: 2, ammo: 9, medkits: 1, kills: 2 },
+      { id: 12, seatNo: 2, displayName: '灰狼', status: 'ALIVE', region: 'A', health: 38, armor: 8, food: 3, water: 5, armed: true, weaponName: '简易手枪', weaponLevel: 1, ammo: 3, medkits: 0, kills: 1 },
+      { id: 13, seatNo: 3, displayName: '雾行者', status: 'ALIVE', region: 'B', health: 74, armor: 30, food: 6, water: 3, armed: false, medkits: 2, kills: 0, hidden: true },
+      { id: 14, seatNo: 4, displayName: '赤狐', status: 'ALIVE', region: 'C', health: 62, armor: 14, food: 2, water: 7, armed: true, weaponName: '简易手枪', weaponLevel: 1, ammo: 5, medkits: 1, kills: 0 },
+      { id: 15, seatNo: 5, displayName: '磐石', status: 'ALIVE', region: 'D', health: 27, armor: 42, food: 1, water: 2, armed: true, weaponName: '精确步枪', weaponLevel: 3, ammo: 4, medkits: 0, kills: 3 },
+      { id: 16, seatNo: 6, displayName: '潮汐', status: 'ELIMINATED', region: 'E', health: 0, armor: 0, food: 0, water: 0, armed: false, kills: 0 },
+      { id: 17, seatNo: 7, displayName: '夜莺', status: 'ALIVE', region: 'E', health: 91, armor: 18, food: 6, water: 6, armed: true, weaponName: '战术步枪', weaponLevel: 2, ammo: 8, medkits: 1, kills: 1 },
+      { id: 18, seatNo: 8, displayName: '无影', status: 'ALIVE', region: null, health: 68, armor: 10, food: 4, water: 4, armed: true, weaponName: '简易手枪', weaponLevel: 1, ammo: 2, medkits: 0, kills: 0, hidden: true }
+    ];
+    const battleEvents = [
+      { sequenceNo: 70, eventType: 'BATTLE_SUPPLY_DROP', actorPlayerId: null, roundNo: 8, phase: 'BATTLE', payload: { region: 'C', round: 8, bonus: '高级武器、弹药与补给' } },
+      { sequenceNo: 71, eventType: 'AI_DECISION', actorPlayerId: 11, roundNo: 8, phase: 'BATTLE', payload: { action: 'ATTACK', targetPlayerId: 12, summary: '目标生命较低，当前弹药足够完成压制。', confidence: 84, source: 'MODEL' } },
+      { sequenceNo: 72, eventType: 'BATTLE_ACTION_EXECUTED', actorPlayerId: 11, roundNo: 8, phase: 'BATTLE', payload: { action: 'ATTACK', playerId: 11, targetPlayerId: 12, region: 'A', health: 86, food: 5, water: 4, armed: true, weaponName: '战术步枪', weaponLevel: 2, ammo: 9, armor: 24, medkits: 1, kills: 2, damage: 31, critical: true, targetHealth: 38 } }
+    ];
+
+    const battleMode = new URLSearchParams(location.search).get('mode') === 'battle';
+    if (battleMode) {
+      renderRealWatch({ id: 902, name: '边境生存实验', mode: 'BATTLE_ROYALE', status: 'RUNNING', currentRound: 8, publicGame: true }, battlePlayers, battleEvents, false);
+    } else {
+      renderRealWatch({ id: 901, name: '雾都推理局', mode: 'WEREWOLF', status: 'RUNNING', currentRound: 3, currentPhase: 'DAY_VOTE', publicGame: true }, werewolfPlayers, werewolfEvents, false);
+    }
+  </script>
+</body>
+</html>

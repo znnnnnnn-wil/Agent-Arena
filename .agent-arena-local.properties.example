@@ -1,0 +1,5 @@
+# Copy this file to .agent-arena-local.properties for direct IDE/Maven runs.
+# The local file is ignored by Git. Never commit real database or API secrets.
+MYSQL_USERNAME=agent_arena
+MYSQL_PASSWORD=replace-with-your-local-mysql-password
+API_KEY_ENCRYPTION_SECRET=replace-with-at-least-32-random-characters

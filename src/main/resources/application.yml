@@ -1,0 +1,47 @@
+spring:
+  application:
+    name: agent-arena
+  config:
+    import: optional:file:.agent-arena-local.properties
+  autoconfigure:
+    exclude: org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+  jackson:
+    default-property-inclusion: non_null
+    time-zone: Asia/Shanghai
+  mvc:
+    problemdetails:
+      enabled: false
+
+server:
+  port: ${SERVER_PORT:8080}
+
+mybatis-flex:
+  mapper-locations:
+    - classpath*:/mapper/**/*.xml
+  configuration:
+    map-underscore-to-camel-case: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+agent-arena:
+  security:
+    api-key-encryption-secret: ${API_KEY_ENCRYPTION_SECRET}
+  model:
+    read-timeout: 25s
+    max-retries: 0
+    calls-per-minute: 20
+    allowed-custom-hosts: ${MODEL_ALLOWED_HOSTS:}
+    max-concurrent-calls: ${MODEL_MAX_CONCURRENT_CALLS:8}
+  game:
+    snapshot-retention: 5
+    turns-per-minute: 30
+  stream:
+    heartbeat-interval: 20s
+    max-subscribers-per-game: 100
+    max-total-subscribers: 1000
