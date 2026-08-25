@@ -191,6 +191,9 @@ class ArenaStage {
     this.lowPower = (navigator.hardwareConcurrency || 8) <= 4
       || (navigator.deviceMemory || 8) <= 4
       || window.matchMedia('(max-width: 720px)').matches;
+    // Low-power runners keep the procedural agents responsive while capable
+    // devices upgrade them asynchronously to the external GLTF assets.
+    this.externalAssetsEnabled = !this.lowPower;
     this.clock = new THREE.Clock();
     this.pointer = new THREE.Vector2();
     this.lastLabelUpdate = -Infinity;
@@ -383,13 +386,27 @@ class ArenaStage {
     group.userData.scale = scale;
     group.userData.desiredAssetKind = assetKind;
     this.agents.set(String(player.id), group);
-    this.attachAgentModel(group, player, scale, assetKind);
+    if (this.externalAssetsEnabled) this.attachAgentModel(group, player, scale, assetKind);
+    else this.markAssetReady(group, player, 'procedural-fallback');
     return group;
+  }
+
+  markAssetReady(group, player, assetKind = group.userData.desiredAssetKind) {
+    if (group.userData.assetReady) return;
+    group.userData.assetReady = true;
+    group.userData.assetKind = assetKind;
+    this.loadedAssetCount += 1;
+    this.host.dataset.arena3dAssets = String(this.loadedAssetCount);
+    this.host.dataset.arena3dAssetMode = this.externalAssetsEnabled ? 'external' : 'procedural-fallback';
+    if (this.pendingMoment && playerIdEquals(this.pendingMoment.actorPlayerId, player.id)) {
+      const pending = this.pendingMoment;
+      this.pendingMoment = null;
+      this.performMoment(pending, true);
+    }
   }
 
   async attachAgentModel(group, player, scale, assetKind) {
     try {
-      const firstLoad = !group.userData.assetReady;
       if (assetKind === 'drone') {
         const gltf = await loadGltf(ASSETS.eyeDrone);
         if (this.disposed || !group.parent || group.userData.desiredAssetKind !== assetKind) return;
@@ -409,21 +426,14 @@ class ArenaStage {
       group.children.forEach((child) => {
         if (child.userData.agentPlaceholder) child.visible = false;
       });
-      group.userData.assetKind = assetKind;
-      group.userData.assetReady = true;
-      if (firstLoad) this.loadedAssetCount += 1;
-      this.host.dataset.arena3dAssets = String(this.loadedAssetCount);
-      if (this.pendingMoment && playerIdEquals(this.pendingMoment.actorPlayerId, player.id)) {
-        const pending = this.pendingMoment;
-        this.pendingMoment = null;
-        this.performMoment(pending, true);
-      }
+      this.markAssetReady(group, player, assetKind);
       if (this.reducedMotion) {
         this.updateLabels();
         this.renderer.render(this.scene, this.camera);
       }
     } catch (error) {
       console.warn(`[Agent Arena 3D] Failed to load ${assetKind} model; using procedural fallback.`, error);
+      this.markAssetReady(group, player, 'procedural-fallback');
     }
   }
 
@@ -974,7 +984,8 @@ class ArenaStage {
     group.children.forEach((child) => {
       if (child.userData.agentPlaceholder) child.visible = true;
     });
-    this.attachAgentModel(group, player, group.userData.scale || 1, assetKind);
+    if (this.externalAssetsEnabled) this.attachAgentModel(group, player, group.userData.scale || 1, assetKind);
+    else this.markAssetReady(group, player, 'procedural-fallback');
   }
 
   latestMomentEvent() {
