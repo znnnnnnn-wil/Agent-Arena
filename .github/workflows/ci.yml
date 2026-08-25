@@ -41,3 +41,17 @@ jobs:
         run: mvn --batch-mode verify
       - name: Check browser JavaScript syntax
         run: node --check src/main/resources/static/app.js
+      - name: Install browser test dependencies
+        run: npm ci
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Run Playwright functional journeys
+        run: npm run test:e2e:functional
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          if-no-files-found: ignore
+          retention-days: 7
