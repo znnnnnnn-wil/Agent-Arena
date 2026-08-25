@@ -1,0 +1,21 @@
+package com.zn.agentarena.modules.battle.social;
+
+/** 可与一个战术动作并行提交的结构化社会动作。 */
+public enum BattleSocialActionType {
+    PROPOSE_ALLIANCE,
+    ACCEPT_ALLIANCE,
+    REJECT_ALLIANCE,
+    LEAVE_ALLIANCE,
+    PROPOSE_PROMISE,
+    ACCEPT_PROMISE,
+    REJECT_PROMISE,
+    FULFILL_PROMISE,
+    PROPOSE_TRADE,
+    ACCEPT_TRADE,
+    REJECT_TRADE,
+    CONTRIBUTE_OBJECTIVE,
+    SHARE_RUMOR,
+    PROPOSE_INFORMATION_TRADE,
+    ACCEPT_INFORMATION_TRADE,
+    REJECT_INFORMATION_TRADE
+}

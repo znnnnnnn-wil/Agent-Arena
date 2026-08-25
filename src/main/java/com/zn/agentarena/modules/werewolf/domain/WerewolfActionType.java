@@ -19,6 +19,12 @@ public enum WerewolfActionType {
     WITCH_POISON,
     /** 白天公开发言。 */
     SPEAK,
+    /** 对争议玩家发起定向质询。 */
+    QUESTION,
+    /** 被质询玩家公开回应。 */
+    RESPOND,
+    /** 质询结束后的简短最终陈述。 */
+    FINAL_STATEMENT,
     /** 白天投票放逐目标。 */
     VOTE,
     /** 跳过本次行动。 */

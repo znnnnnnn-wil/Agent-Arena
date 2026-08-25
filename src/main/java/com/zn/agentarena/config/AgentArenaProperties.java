@@ -33,7 +33,7 @@ public record AgentArenaProperties(Model model, Game game, Stream stream) {
     public record Game(Integer snapshotRetention, Integer turnsPerMinute) {
         public Game {
             snapshotRetention = snapshotRetention == null ? 5 : Math.max(1, snapshotRetention);
-            turnsPerMinute = turnsPerMinute == null ? 30 : Math.max(1, turnsPerMinute);
+            turnsPerMinute = turnsPerMinute == null ? 120 : Math.max(1, turnsPerMinute);
         }
     }
 

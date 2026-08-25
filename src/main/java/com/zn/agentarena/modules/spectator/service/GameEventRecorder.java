@@ -36,6 +36,15 @@ public class GameEventRecorder {
      * @param event 引擎事件
      */
     @Transactional(rollbackFor = Exception.class)
+    /**
+     * 将引擎事件转换为可持久化、可公开筛选的游戏事件。
+     *
+     * @param gameId 游戏标识
+     * @param roundNo 当前回合号
+     * @param phase 当前阶段
+     * @param sequenceNo 游戏内事件序号
+     * @param event 引擎产生的事件
+     */
     public void record(Long gameId, int roundNo, String phase, long sequenceNo, EngineEvent event) {
         GameEvent entity = GameEvent.builder()
                 .gameId(gameId)
@@ -52,7 +61,10 @@ public class GameEventRecorder {
         if (TransactionSynchronizationManager.isActualTransactionActive()) {
             TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
                 @Override
-                public void afterCommit() {
+    /**
+     * 在事务提交后向实时订阅者发布暂存的事件。
+     */
+    public void afterCommit() {
                     streamService.publish(view);
                 }
             });

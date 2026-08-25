@@ -24,26 +24,55 @@ import java.util.List;
 @Validated
 @RequiredArgsConstructor
 @RequestMapping("/api/public/games")
+/**
+ * 提供无需认证的公开游戏、回放与摘要查询接口。
+ */
 public class PublicGameController {
 
     private final IGameService gameService;
 
     @GetMapping
+    /**
+     * 分页查询公开游戏。
+     *
+     * @param limit 最大返回数量
+     * @return 公开游戏列表
+     */
     public Response<List<GameResponse>> list(@RequestParam(defaultValue = "20") @Min(1) @Max(100) int limit) {
         return Response.success(gameService.listPublicGames(limit));
     }
 
     @GetMapping("/{gameId}")
+    /**
+     * 查询单个公开游戏的状态。
+     *
+     * @param gameId 游戏标识
+     * @return 游戏详情
+     */
     public Response<GameResponse> get(@PathVariable @Positive Long gameId) {
         return Response.success(gameService.getPublicGame(gameId));
     }
 
     @GetMapping("/{gameId}/players")
+    /**
+     * 查询公开游戏中的玩家。
+     *
+     * @param gameId 游戏标识
+     * @return 玩家列表
+     */
     public Response<List<GamePlayerResponse>> players(@PathVariable @Positive Long gameId) {
         return Response.success(gameService.getPublicGamePlayers(gameId));
     }
 
     @GetMapping("/{gameId}/replay")
+    /**
+     * 查询公开游戏的回放事件。
+     *
+     * @param gameId 游戏标识
+     * @param afterSequence 排除该序号及之前的事件
+     * @param limit 最大返回数量
+     * @return 回放事件列表
+     */
     public Response<List<ReplayEventResponse>> replay(@PathVariable @Positive Long gameId,
                                                       @RequestParam(defaultValue = "0") @Min(0) long afterSequence,
                                                       @RequestParam(defaultValue = "500") @Min(1) @Max(500) int limit) {
@@ -51,6 +80,12 @@ public class PublicGameController {
     }
 
     @GetMapping("/{gameId}/summary")
+    /**
+     * 查询公开游戏的结算摘要。
+     *
+     * @param gameId 游戏标识
+     * @return 游戏摘要
+     */
     public Response<GameSummaryResponse> summary(@PathVariable @Positive Long gameId) {
         return Response.success(gameService.getPublicSummary(gameId));
     }

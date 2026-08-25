@@ -11,6 +11,8 @@ import org.junit.jupiter.api.Test;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -62,6 +64,16 @@ class WerewolfGameEngineTest {
     }
 
     @Test
+    @DisplayName("wolfTarget: 狼人不能袭击本局存活狼人队友")
+    void wolfCannotTargetWolfTeammate() {
+        var validation = engine.validate(state,
+                new WerewolfAction(1L, WerewolfActionType.WOLF_KILL, 2L, null));
+
+        assertFalse(validation.valid());
+        assertEquals(WerewolfPhase.NIGHT_WOLF, state.getPhase());
+    }
+
+    @Test
     @DisplayName("dayFlow: 完成所有发言和投票后应放逐最高票玩家并进入下一夜")
     void testDayDiscussionAndVoteSuccess() {
         state.setPhase(WerewolfPhase.DAY_DISCUSSION);
@@ -83,6 +95,116 @@ class WerewolfGameEngineTest {
         assertFalse(state.findPlayer(5L).isAlive());
         assertEquals(WerewolfPhase.NIGHT_WOLF, state.getPhase());
         assertEquals(2, state.getRoundNo());
+    }
+
+    @Test
+    @DisplayName("speech: 结构化公开立场应写入事件和快照状态")
+    void structuredSpeechIsPersistedAsPublicStance() {
+        state.setPhase(WerewolfPhase.DAY_DISCUSSION);
+        WerewolfAction action = new WerewolfAction(1L, WerewolfActionType.SPEAK, null,
+                "我怀疑5号的立场变化，同时暂时支持3号。", List.of("VILLAGER"),
+                List.of(5), List.of(3), 5, List.of("VOTE_SHIFT"),
+                "5号的投票意向发生变化", 0.76D);
+
+        EngineResult<WerewolfGameState> result = engine.execute(state, action);
+
+        WerewolfPublicStance stance = state.getPublicStances().get(1L);
+        assertNotNull(stance);
+        assertEquals(List.of(5), stance.getSuspects());
+        assertEquals(List.of(3), stance.getSupports());
+        assertEquals(5, stance.getVoteIntentSeatNo());
+        assertEquals(List.of("VOTE_SHIFT"), result.events().get(0).publicPayload().get("reasonTags"));
+        assertEquals("我怀疑5号的立场变化，同时暂时支持3号。",
+                result.events().get(0).publicPayload().get("publicSpeech"));
+        assertFalse(result.events().get(0).publicPayload().containsKey("role"));
+    }
+
+    @Test
+    @DisplayName("enhancedDay: 公开陈述后应进入质询、回应、最终陈述再投票")
+    void enhancedDiscussionFlowsThroughQuestionAndResponse() {
+        state.setPhase(WerewolfPhase.DAY_DISCUSSION);
+        state.setDiscussionVersion(2);
+        List<Long> alive = state.alivePlayers().stream().map(WerewolfPlayerState::getPlayerId).toList();
+        for (Long playerId : alive) {
+            int seat = state.findPlayer(playerId).getSeatNo();
+            List<Integer> suspects = seat == 1 || seat == 2 ? List.of(3) : List.of();
+            engine.execute(state, publicAction(playerId, WerewolfActionType.SPEAK, null,
+                    "这是" + seat + "号的公开陈述。", suspects, suspects.isEmpty() ? null : 3, 0.7D));
+        }
+
+        assertEquals(WerewolfPhase.DAY_QUESTION, state.getPhase());
+        assertEquals(1, state.getQuestionQueue().size());
+        WerewolfQuestionPair pair = state.getQuestionQueue().get(0);
+        assertEquals(3L, pair.getRespondentPlayerId());
+
+        EngineResult<WerewolfGameState> question = engine.execute(state,
+                publicAction(pair.getQuestionerPlayerId(), WerewolfActionType.QUESTION,
+                        pair.getRespondentPlayerId(), "请解释你的公开立场变化。", List.of(3), 3, 0.8D));
+        assertEquals(WerewolfPhase.DAY_RESPONSE, state.getPhase());
+        assertTrue(question.events().stream().anyMatch(event -> "PLAYER_QUESTIONED".equals(event.type())));
+        assertEquals(3, question.events().get(0).publicPayload().get("targetSeatNo"));
+
+        EngineResult<WerewolfGameState> response = engine.execute(state,
+                publicAction(pair.getRespondentPlayerId(), WerewolfActionType.RESPOND,
+                        pair.getQuestionerPlayerId(), "我根据新公开信息更新了判断。", List.of(5), 5, 0.65D));
+        assertEquals(WerewolfPhase.DAY_FINAL_STATEMENT, state.getPhase());
+        assertTrue(response.events().stream().anyMatch(event -> "PLAYER_RESPONDED".equals(event.type())));
+
+        for (Long playerId : alive) {
+            engine.execute(state, publicAction(playerId, WerewolfActionType.FINAL_STATEMENT, null,
+                    "确认最终投票意向。", List.of(5), 5, 0.6D));
+        }
+        assertEquals(WerewolfPhase.DAY_VOTE, state.getPhase());
+    }
+
+    @Test
+    @DisplayName("enhancedDay: 没有有效争议时应跳过质询直接投票")
+    void noControversySkipsQuestioning() {
+        state.setPhase(WerewolfPhase.DAY_DISCUSSION);
+        state.setDiscussionVersion(2);
+        for (WerewolfPlayerState player : state.alivePlayers()) {
+            engine.execute(state, publicAction(player.getPlayerId(), WerewolfActionType.SPEAK, null,
+                    "当前没有足够证据。", List.of(), null, 0.3D));
+        }
+
+        assertEquals(WerewolfPhase.DAY_VOTE, state.getPhase());
+        assertTrue(state.getQuestionQueue().isEmpty());
+    }
+
+    @Test
+    @DisplayName("enhancedDay: 死亡玩家不能质询且死亡目标不能回应")
+    void deadPlayersCannotQuestionOrRespond() {
+        state.setPhase(WerewolfPhase.DAY_QUESTION);
+        state.setQuestionQueue(new ArrayList<>(List.of(WerewolfQuestionPair.builder()
+                .questionerPlayerId(1L).respondentPlayerId(3L).build())));
+        state.findPlayer(1L).setAlive(false);
+        assertFalse(engine.validate(state, publicAction(1L, WerewolfActionType.QUESTION, 3L,
+                "问题", List.of(3), 3, 0.5D)).valid());
+
+        state.findPlayer(1L).setAlive(true);
+        state.findPlayer(3L).setAlive(false);
+        assertFalse(engine.validate(state, publicAction(1L, WerewolfActionType.QUESTION, 3L,
+                "问题", List.of(3), 3, 0.5D)).valid());
+    }
+
+    @Test
+    @DisplayName("compatibility: 缺少新增字段的旧快照应反序列化并走旧版发言到投票流程")
+    void oldSnapshotDeserializesAndContinues() throws Exception {
+        String oldJson = """
+                {"gameId":88,"sequenceNo":0,"roundNo":2,"phase":"DAY_DISCUSSION","discussionIndex":0,
+                 "players":[
+                   {"playerId":101,"seatNo":1,"displayName":"一号","role":"VILLAGER","alive":true},
+                   {"playerId":102,"seatNo":2,"displayName":"二号","role":"WEREWOLF","alive":true}
+                 ],"votes":{},"publicHistory":[]}
+                """;
+        WerewolfGameState oldState = new ObjectMapper().readValue(oldJson, WerewolfGameState.class);
+
+        assertEquals(0, oldState.getDiscussionVersion());
+        engine.execute(oldState, new WerewolfAction(101L, WerewolfActionType.SPEAK, null, "一号发言"));
+        engine.execute(oldState, new WerewolfAction(102L, WerewolfActionType.SPEAK, null, "二号发言"));
+
+        assertEquals(WerewolfPhase.DAY_VOTE, oldState.getPhase());
+        assertNotNull(oldState.getPublicStances());
     }
 
     @Test
@@ -159,6 +281,14 @@ class WerewolfGameEngineTest {
                 .players(players)
                 .votes(new LinkedHashMap<>())
                 .build();
+    }
+
+    private WerewolfAction publicAction(Long actorId, WerewolfActionType type, Long targetId,
+                                         String speech, List<Integer> suspects,
+                                         Integer voteIntent, double confidence) {
+        return new WerewolfAction(actorId, type, targetId, speech, List.of("VILLAGER"),
+                suspects, List.of(), voteIntent, List.of("PUBLIC_EVIDENCE"),
+                "依据公开信息", confidence);
     }
 
     private WerewolfPlayerState player(Long id, int seatNo, WerewolfRole role) {

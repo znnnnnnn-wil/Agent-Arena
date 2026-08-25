@@ -1,4 +1,4 @@
-package com.zn.agentarena.common.enums;
+package com.zn.agentarena.modules.game.domain;
 
 /**
  * 游戏玩家状态。
@@ -11,6 +11,8 @@ public enum PlayerStatus {
     WAITING,
     /** 当前存活。 */
     ALIVE,
+    /** 大逃杀中暂时倒地，仍可被救援或处决。 */
+    DOWNED,
     /** 已被淘汰。 */
     ELIMINATED,
     /** 已断开连接。 */

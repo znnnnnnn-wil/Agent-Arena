@@ -17,6 +17,12 @@ public enum WerewolfPhase {
     NIGHT_WITCH,
     /** 白天讨论阶段。 */
     DAY_DISCUSSION,
+    /** 白天定向质询阶段。 */
+    DAY_QUESTION,
+    /** 被质询玩家回应阶段。 */
+    DAY_RESPONSE,
+    /** 投票前最终陈述阶段。 */
+    DAY_FINAL_STATEMENT,
     /** 白天投票阶段。 */
     DAY_VOTE,
     /** 对局结束阶段。 */

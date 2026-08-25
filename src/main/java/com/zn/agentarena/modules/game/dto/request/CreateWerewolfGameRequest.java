@@ -22,4 +22,10 @@ public class CreateWerewolfGameRequest {
     /** 分配给 AI 玩家的模型配置 ID 列表。 */
     @Valid
     private List<@Positive Long> modelConfigIds;
+    /** 分配给席位的人格配置 ID；允许与模型配置独立组合。 */
+    @Valid
+    private List<@Positive Long> agentProfileIds;
+    /** 每个席位的显示名称；为空时使用默认名称。 */
+    @Size(max = 8)
+    private List<@Size(max = 64) String> playerDisplayNames;
 }
