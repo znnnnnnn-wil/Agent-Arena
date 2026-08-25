@@ -194,6 +194,7 @@ class ArenaStage {
     // Low-power runners keep the procedural agents responsive while capable
     // devices upgrade them asynchronously to the external GLTF assets.
     this.externalAssetsEnabled = !this.lowPower;
+    this.animateContinuously = !this.reducedMotion && !this.lowPower;
     this.clock = new THREE.Clock();
     this.pointer = new THREE.Vector2();
     this.lastLabelUpdate = -Infinity;
@@ -427,7 +428,7 @@ class ArenaStage {
         if (child.userData.agentPlaceholder) child.visible = false;
       });
       this.markAssetReady(group, player, assetKind);
-      if (this.reducedMotion) {
+      if (!this.animateContinuously) {
         this.updateLabels();
         this.renderer.render(this.scene, this.camera);
       }
@@ -937,7 +938,7 @@ class ArenaStage {
     }
     this.queueLatestMoment(false);
     this.resize();
-    if (this.reducedMotion) {
+    if (!this.animateContinuously) {
       this.updateLabels();
       this.renderer.render(this.scene, this.camera);
     }
@@ -1297,7 +1298,7 @@ class ArenaStage {
       this.frameCostTotal = 0;
       this.frameCostSamples = 0;
     }
-    if (!this.reducedMotion) this.animationFrame = requestAnimationFrame(() => this.animate());
+    if (this.animateContinuously) this.animationFrame = requestAnimationFrame(() => this.animate());
   }
 
   dispose() {
