@@ -31,9 +31,20 @@ class DatabaseMigrationIT {
                         + "WHERE table_schema = DATABASE() AND table_name = 'aa_user' "
                         + "AND column_name IN ('username', 'password_hash')",
                 Integer.class);
+        Integer templateTableCount = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM information_schema.tables "
+                        + "WHERE table_schema = DATABASE() AND table_name = 'aa_lineup_template'",
+                Integer.class);
+        Integer profileDeletedColumnCount = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM information_schema.columns "
+                        + "WHERE table_schema = DATABASE() AND table_name = 'aa_agent_profile' "
+                        + "AND column_name = 'deleted'",
+                Integer.class);
 
         assertEquals(1, gameTableCount);
         assertEquals(1, deletedColumnCount);
         assertEquals(2, accountColumnCount);
+        assertEquals(1, templateTableCount);
+        assertEquals(1, profileDeletedColumnCount);
     }
 }

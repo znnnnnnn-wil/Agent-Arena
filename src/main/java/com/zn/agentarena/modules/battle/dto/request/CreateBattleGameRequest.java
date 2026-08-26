@@ -22,6 +22,10 @@ public class CreateBattleGameRequest {
     private Boolean publicGame;
     /** 参与对局的 AI 模型配置 ID 列表。 */
     private List<@Positive Long> modelConfigIds;
+    /** 每个席位的人格配置 ID；为空表示使用中性人格。 */
+    private List<@Positive Long> agentProfileIds;
+    /** 每个席位的显示名称；为空时使用默认名称。 */
+    private List<@Size(max = 64) String> playerDisplayNames;
     /** 对局玩家总人数，默认八人。 */
     @Min(6)
     @Max(10)

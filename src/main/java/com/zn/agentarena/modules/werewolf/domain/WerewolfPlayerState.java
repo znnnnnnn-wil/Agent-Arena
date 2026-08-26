@@ -1,5 +1,6 @@
 package com.zn.agentarena.modules.werewolf.domain;
 
+import com.zn.agentarena.modules.agent.domain.AgentPersonaSnapshot;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -28,6 +29,9 @@ public class WerewolfPlayerState {
 
     /** 玩家名称 */
     private String displayName;
+
+    /** 对局开始时固化的 Agent 人格。 */
+    private AgentPersonaSnapshot persona;
 
     /** 游戏角色 */
     private WerewolfRole role;

@@ -3,12 +3,15 @@ package com.zn.agentarena.modules.game.controller;
 import com.zn.agentarena.common.Response;
 import com.zn.agentarena.common.utils.FixedWindowRateLimiter;
 import com.zn.agentarena.modules.game.dto.request.CreateWerewolfGameRequest;
+import com.zn.agentarena.modules.game.dto.request.RematchGameRequest;
 import com.zn.agentarena.modules.game.dto.response.GameResponse;
 import com.zn.agentarena.modules.game.dto.response.GamePlayerResponse;
 import com.zn.agentarena.modules.game.service.IGameService;
 import com.zn.agentarena.modules.replay.dto.response.GameSummaryResponse;
 import com.zn.agentarena.modules.replay.dto.response.ReplayEventResponse;
 import com.zn.agentarena.modules.battle.dto.request.CreateBattleGameRequest;
+import com.zn.agentarena.modules.turing.dto.request.CreateTuringHuntGameRequest;
+import com.zn.agentarena.modules.turing.dto.request.TuringHuntHumanActionRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Min;
@@ -35,6 +38,12 @@ public class GameController {
     private final IGameService gameService;
     private final FixedWindowRateLimiter rateLimiter;
     @GetMapping
+    /**
+     * 查询当前用户拥有的游戏。
+     *
+     * @param userId 当前认证用户的标识
+     * @return 游戏列表
+     */
     public Response<List<GameResponse>> list(@AuthenticationPrincipal Long userId) {
         return Response.success(gameService.listGames(userId));
     }
@@ -55,6 +64,14 @@ public class GameController {
         return Response.success(gameService.createBattleGame(userId, request));
     }
 
+    /** 创建一场图灵潜伏局。 */
+    @PostMapping("/turing-hunt")
+    public Response<GameResponse> createTuringHunt(@AuthenticationPrincipal Long userId,
+                                                    @Valid @RequestBody CreateTuringHuntGameRequest request) {
+        rateLimiter.check(userId, "game-create", 10);
+        return Response.success(gameService.createTuringHuntGame(userId, request));
+    }
+
     /** 启动大逃杀。 */
     @PostMapping("/{gameId}/battle-start")
     public Response<GameResponse> startBattle(@AuthenticationPrincipal Long userId,
@@ -67,6 +84,37 @@ public class GameController {
     public Response<GameResponse> battleNextTurn(@AuthenticationPrincipal Long userId,
                                                  @PathVariable @Positive Long gameId) {
         return Response.success(gameService.runNextBattleTurn(userId, gameId));
+    }
+
+    /** 启动图灵潜伏局并发布第一轮公共问题。 */
+    @PostMapping("/{gameId}/turing-start")
+    public Response<GameResponse> startTuringHunt(@AuthenticationPrincipal Long userId,
+                                                   @PathVariable @Positive Long gameId) {
+        return Response.success(gameService.startTuringHuntGame(userId, gameId));
+    }
+
+    /** 推进一名 AI 或一次确定性阶段转换。 */
+    @PostMapping("/{gameId}/turing-next-turn")
+    public Response<GameResponse> turingNextTurn(@AuthenticationPrincipal Long userId,
+                                                  @PathVariable @Positive Long gameId) {
+        return Response.success(gameService.runNextTuringTurn(userId, gameId));
+    }
+
+    /** 提交图灵潜伏局当前要求的真人动作。 */
+    @PostMapping("/{gameId}/turing-human-actions")
+    public Response<GameResponse> turingHumanAction(@AuthenticationPrincipal Long userId,
+                                                     @PathVariable @Positive Long gameId,
+                                                     @Valid @RequestBody TuringHuntHumanActionRequest request) {
+        return Response.success(gameService.submitTuringHumanAction(userId, gameId, request));
+    }
+
+    /** 使用相同模型、人格、规则和席位名称创建一场新比赛。 */
+    @PostMapping("/{gameId}/rematch")
+    public Response<GameResponse> rematch(@AuthenticationPrincipal Long userId,
+                                          @PathVariable @Positive Long gameId,
+                                          @Valid @RequestBody RematchGameRequest request) {
+        rateLimiter.check(userId, "game-create", 10);
+        return Response.success(gameService.rematch(userId, gameId, request));
     }
 
     /** 启动等待中的游戏。 */

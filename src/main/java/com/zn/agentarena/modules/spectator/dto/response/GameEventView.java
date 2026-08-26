@@ -26,6 +26,14 @@ public record GameEventView(
         Instant occurredAt
 ) {
 
+    /**
+     * 从引擎事件创建可供观战端消费的公开视图。
+     *
+     * @param gameId 游戏标识
+     * @param sequenceNo 事件序号
+     * @param event 引擎事件
+     * @return 过滤敏感字段后的事件视图
+     */
     public static GameEventView from(Long gameId, long sequenceNo, EngineEvent event) {
         return new GameEventView(gameId, sequenceNo, event.type(),
                 PublicEventPolicy.publicActorPlayerId(event.type(), event.actorPlayerId()),

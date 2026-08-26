@@ -11,6 +11,8 @@ public enum BattleActionType {
     MOVE,
     /** 搜索当前区域。 */
     SEARCH,
+    /** 占领当前区域的空投，需要守住一个行动窗口。 */
+    CAPTURE,
     /** 原地休整。 */
     REST,
     /** 与其他玩家交易。 */
@@ -23,6 +25,10 @@ public enum BattleActionType {
     HEAL,
     /** 加固防具，降低后续攻击伤害。 */
     GUARD,
+    /** 消耗医疗包救起同区域倒地玩家。 */
+    REVIVE,
+    /** 处决同区域倒地玩家。 */
+    EXECUTE,
     /** 跳过本次行动。 */
     SKIP
 }

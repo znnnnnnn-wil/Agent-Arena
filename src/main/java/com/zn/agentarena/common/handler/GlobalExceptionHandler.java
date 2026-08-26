@@ -3,6 +3,7 @@ package com.zn.agentarena.common.handler;
 import com.zn.agentarena.common.Response;
 import com.zn.agentarena.common.enums.ResultCodeEnum;
 import com.zn.agentarena.common.exceptions.CustomException;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -15,6 +16,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
+import java.io.IOException;
 import java.util.stream.Collectors;
 
 /**
@@ -100,6 +102,23 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Response<Void>> handleNoResourceFound() {
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
                 .body(Response.fail(ResultCodeEnum.RESOURCE_NOT_FOUND));
+    }
+
+    /**
+     * Handles a client disconnect after a streaming response has already started.
+     *
+     * <p>An SSE write failure is dispatched back through Spring MVC's exception
+     * resolvers. At that point the response is already committed, so attempting to
+     * serialize the regular JSON error body only causes a second conversion error.</p>
+     */
+    @ExceptionHandler(IOException.class)
+    public ResponseEntity<Response<Void>> handleIOException(IOException exception,
+                                                            HttpServletResponse response) {
+        if (response.isCommitted()) {
+            log.debug("客户端已断开，忽略已提交响应的I/O异常: {}", exception.getMessage());
+            return null;
+        }
+        return handleUnexpectedException(exception);
     }
 
     /**

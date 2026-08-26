@@ -40,7 +40,7 @@ agent-arena:
     max-concurrent-calls: ${MODEL_MAX_CONCURRENT_CALLS:8}
   game:
     snapshot-retention: 5
-    turns-per-minute: 30
+    turns-per-minute: 120
   stream:
     heartbeat-interval: 20s
     max-subscribers-per-game: 100

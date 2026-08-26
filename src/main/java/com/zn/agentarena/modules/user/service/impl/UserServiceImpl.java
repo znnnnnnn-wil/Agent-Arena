@@ -60,6 +60,13 @@ public class UserServiceImpl implements IUserService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
+    /**
+     * 将当前访客升级为账号用户，或创建并登录一个账号。
+     *
+     * @param currentUserId 当前访客用户标识，可为空
+     * @param request 注册信息
+     * @return 已认证的会话信息
+     */
     public AuthSessionResponse registerAccount(Long currentUserId, RegisterAccountRequest request) {
         String username = normalizeUsername(request.getUsername());
         if (findByUsername(username) != null) {
@@ -95,6 +102,12 @@ public class UserServiceImpl implements IUserService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
+    /**
+     * 校验账号凭据并创建登录会话。
+     *
+     * @param request 登录凭据
+     * @return 已认证的会话信息
+     */
     public AuthSessionResponse login(LoginRequest request) {
         String username = normalizeUsername(request.getUsername());
         User user = findByUsername(username);
@@ -113,6 +126,11 @@ public class UserServiceImpl implements IUserService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
+    /**
+     * 使指定用户当前的服务端会话失效。
+     *
+     * @param userId 用户标识
+     */
     public void logout(Long userId) {
         User user = requireUser(userId);
         user.setVisitorToken(sha256(generateToken()));
@@ -120,6 +138,12 @@ public class UserServiceImpl implements IUserService {
     }
 
     @Override
+    /**
+     * 查询当前认证用户的基本信息。
+     *
+     * @param userId 用户标识
+     * @return 当前用户信息
+     */
     public CurrentUserResponse getCurrentUser(Long userId) {
         User user = requireUser(userId);
         return CurrentUserResponse.builder()
