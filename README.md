@@ -53,9 +53,15 @@ mvn spring-boot:run
 ```bash
 mvn test
 node --check src/main/resources/static/app.js
+npm ci
+npx playwright install chromium
+npm run test:e2e:functional
+npm run test:e2e:visual
 ```
 
 `mvn verify` 还会执行 `DatabaseMigrationIT`，它需要 `ci` profile 指向一个真实 MySQL。GitHub Actions 已配置 MySQL 8.4 服务并执行完整验证。
+
+Playwright 功能测试使用固定 Mock API 覆盖“模型与人格组合创建对局”和“创建 Agent 人格”等用户流程，不依赖本地 MySQL。视觉测试分别维护 `desktop-chromium` 与 `mobile-chromium` 基线；界面有意变更后运行 `npm run test:e2e:update` 更新，再用 `npm run test:e2e:visual` 做一次只读比对。CI 默认执行跨平台稳定的功能流程，视觉基线由开发环境显式审核后提交。
 
 ## 运行说明
 
