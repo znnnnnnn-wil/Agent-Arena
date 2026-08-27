@@ -19,6 +19,6 @@
     "@playwright/test": "1.61.1"
   },
   "dependencies": {
-    "three": "0.180.0"
+    "three": "0.185.1"
   }
 }
