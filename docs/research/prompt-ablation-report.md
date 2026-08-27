@@ -54,7 +54,7 @@
 - 被纳入分析的 parser repair：1
 - 另有 1 个被丢弃的 P2 尝试连续两次解析失败，未作为实验结果使用
 
-Trace 持久化说明：P2–P7 的 120 条完整 Prompt/Raw/Parsed/Sanitized/Executed Trace 已写入 `prompt-ablation-traces.jsonl`。P0/P1 两轮均完整跑完并输出逐次 Parsed/Sanitized/Executed 分布，但因随后暴露的 nullable confidence / position 统计 Harness Bug，JVM 退出前尚未把这 40 条内存 Trace 写入 JSONL；为遵守 API 成本上限，没有第三次重复调用。报告对此不伪造 Raw 文本。
+Trace 持久化说明：实验运行时曾生成 P2–P7 的 120 条完整 Prompt/Raw/Parsed/Sanitized/Executed Trace。公开源码仓库仅保留本聚合报告，不再分发包含完整 Prompt、内部状态和模型原始输出的 JSONL。P0/P1 两轮均完整跑完并输出逐次 Parsed/Sanitized/Executed 分布，但因随后暴露的 nullable confidence / position 统计 Harness Bug，JVM 退出前尚未持久化这 40 条内存 Trace；为遵守 API 成本上限，没有第三次重复调用。报告对此不伪造 Raw 文本。
 
 四个场景在所有 Variant 中由同一构造器、相同 seed 和相同 GameState 参数生成；`expectedRelevantAction` 只用于离线计分，未进入 Prompt。
 

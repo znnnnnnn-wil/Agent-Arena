@@ -14,20 +14,28 @@
     <groupId>com.zn.agentarena</groupId>
     <artifactId>agentArena</artifactId>
     <version>0.0.1-SNAPSHOT</version>
-    <name>agentArena</name>
-    <description>agentArena</description>
-    <url/>
+    <name>Agent Arena</name>
+    <description>Self-hosted AI game arena with replay and spectator views</description>
+    <url>https://github.com/znnnnnnn-wil/Agent-Arena</url>
     <licenses>
-        <license/>
+        <license>
+            <name>MIT License</name>
+            <url>https://opensource.org/license/mit</url>
+            <distribution>repo</distribution>
+        </license>
     </licenses>
     <developers>
-        <developer/>
+        <developer>
+            <id>znnnnnnn-wil</id>
+            <name>znnnnnnn-wil</name>
+            <url>https://github.com/znnnnnnn-wil</url>
+        </developer>
     </developers>
     <scm>
-        <connection/>
-        <developerConnection/>
-        <tag/>
-        <url/>
+        <connection>scm:git:https://github.com/znnnnnnn-wil/Agent-Arena.git</connection>
+        <developerConnection>scm:git:ssh://git@github.com/znnnnnnn-wil/Agent-Arena.git</developerConnection>
+        <tag>HEAD</tag>
+        <url>https://github.com/znnnnnnn-wil/Agent-Arena</url>
     </scm>
     <properties>
         <java.version>17</java.version>

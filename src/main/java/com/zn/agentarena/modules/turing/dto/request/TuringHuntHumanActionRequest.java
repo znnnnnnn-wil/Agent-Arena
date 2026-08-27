@@ -19,9 +19,11 @@ public class TuringHuntHumanActionRequest {
 
     /** 动作类型 */
     @NotBlank
+    @Size(max = 32)
     private String action;
 
     /** 回答内容 */
+    @Size(max = 90)
     private String answer;
 
     /** primarySuspectSeatNo 字段 */
@@ -39,6 +41,7 @@ public class TuringHuntHumanActionRequest {
     private List<@Size(max = 32) String> reasonTags;
 
     /** 理由摘要 */
+    @Size(max = 50)
     private String reasonSummary;
 
     /** targetSeatNo 字段 */
@@ -47,12 +50,15 @@ public class TuringHuntHumanActionRequest {
     private Integer targetSeatNo;
 
     /** 问题内容 */
+    @Size(max = 45)
     private String question;
 
     /** 回应内容 */
+    @Size(max = 70)
     private String response;
 
     /** 辩护内容 */
+    @Size(max = 80)
     private String defense;
 
     /** counterSuspectSeatNo 字段 */

@@ -10,6 +10,8 @@ node_modules/
 playwright-report/
 test-results/
 .playwright/
+/*-traces.jsonl
+/*-report.md
 .mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
 !**/src/test/**/target/
