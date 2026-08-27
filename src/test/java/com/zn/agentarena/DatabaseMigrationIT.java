@@ -40,11 +40,16 @@ class DatabaseMigrationIT {
                         + "WHERE table_schema = DATABASE() AND table_name = 'aa_agent_profile' "
                         + "AND column_name = 'deleted'",
                 Integer.class);
+        Integer unusedInvocationTableCount = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM information_schema.tables "
+                        + "WHERE table_schema = DATABASE() AND table_name = 'aa_model_invocation'",
+                Integer.class);
 
         assertEquals(1, gameTableCount);
         assertEquals(1, deletedColumnCount);
         assertEquals(2, accountColumnCount);
         assertEquals(1, templateTableCount);
         assertEquals(1, profileDeletedColumnCount);
+        assertEquals(0, unusedInvocationTableCount);
     }
 }

@@ -7,6 +7,11 @@ target/
 node_modules/
 **/node_modules/
 **/dist/
+playwright-report/
+test-results/
+.playwright/
+/*-traces.jsonl
+/*-report.md
 .mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
 !**/src/test/**/target/

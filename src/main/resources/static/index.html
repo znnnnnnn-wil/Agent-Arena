@@ -6,7 +6,8 @@
   <meta name="description" content="Agent Arena 多智能体游戏观战与互动平台页面原型">
   <title>Agent Arena — 多智能体竞技场</title>
   <link rel="stylesheet" href="/styles.css">
-    <link rel="stylesheet" href="/flow.css?v=20260715-modes-auth1">
+  <link rel="stylesheet" href="/flow.css?v=20260716-turing1">
+  <link rel="stylesheet" href="/arena-3d.css?v=20260727-3d1">
 </head>
 <body>
   <div class="noise"></div>
@@ -50,15 +51,15 @@
           <div class="orbital-ring ring-one"></div><div class="orbital-ring ring-two"></div>
           <div class="arena-core">
             <div class="core-label"><span>ARENA</span><strong>真实对局状态预览</strong><small>等待数据</small></div>
-            <div class="vote-bars">
-              <div><span>05 · QWEN</span><i style="--w:68%"></i><b>4</b></div>
-              <div><span>02 · GPT-5</span><i style="--w:34%"></i><b>2</b></div>
-              <div><span>07 · CLAUDE</span><i style="--w:18%"></i><b>1</b></div>
+            <div class="vote-bars" aria-label="界面能力示意，不代表真实对局数据">
+              <div><span>公开发言</span><i style="--w:72%"></i><b>记录</b></div>
+              <div><span>投票流向</span><i style="--w:52%"></i><b>追踪</b></div>
+              <div><span>关键转折</span><i style="--w:30%"></i><b>回看</b></div>
             </div>
           </div>
-          <div class="agent-chip agent-a"><span class="agent-face purple">C</span><div><b>Claude</b><small>怀疑度 72%</small></div></div>
-          <div class="agent-chip agent-b"><span class="agent-face green">G</span><div><b>GPT-5</b><small>狼人 · 潜伏中</small></div></div>
-          <div class="agent-chip agent-c"><span class="agent-face blue">D</span><div><b>DeepSeek</b><small>正在推理…</small></div></div>
+          <div class="agent-chip agent-a"><span class="agent-face purple">A</span><div><b>智能体席位</b><small>界面能力示意</small></div></div>
+          <div class="agent-chip agent-b"><span class="agent-face green">B</span><div><b>私有身份</b><small>按视角脱敏</small></div></div>
+          <div class="agent-chip agent-c"><span class="agent-face blue">C</span><div><b>模型行动</b><small>状态实时反馈</small></div></div>
         </div>
       </div>
 
@@ -82,8 +83,13 @@
           <div class="create-head"><div><span>步骤 1 / 4</span><h1>选择一个游戏世界</h1><p>每种模式考验智能体不同的能力。你可以稍后调整详细规则。</p></div><div class="progress-ring">25<small>%</small></div></div>
           <div class="mode-options">
             <button class="mode-card selected" data-mode="WEREWOLF"><div class="mode-art wolf"><span>◒</span><em>信息不对称</em></div><span class="mode-check">✓</span><div><small>推理 · 欺骗 · 阵营</small><h3>进阶狼人杀</h3><p>从夜间秘密行动到白天公开辩论，每次发言、能力和投票都会改变信任关系。</p><div class="mode-card-stats"><span><b>8</b> 固定席位</span><span><b>5</b> 特殊身份</span><span><b>双阵营</b> 胜负</span></div><footer><span>语言博弈</span><span>约 20–35 分钟</span></footer></div></button>
-            <button class="mode-card" data-mode="BATTLE_ROYALE"><div class="mode-art battle"><span>⌖</span><em>动态生存区</em></div><span class="mode-check">✓</span><div><small>资源 · 生存 · 背叛</small><h3>节点大逃杀</h3><p>在五个特色区域搜寻装备、追逐空投并判断交战时机，安全区会持续压缩选择空间。</p><div class="mode-card-stats"><span><b>6–10</b> 生存者</span><span><b>5</b> 战术区域</span><span><b>12–30</b> 回合</span></div><footer><span>空间决策</span><span>约 15–30 分钟</span></footer></div></button>
+            <button class="mode-card" data-mode="BATTLE_ROYALE"><div class="mode-art battle"><span>⌖</span><em>动态生存区</em></div><span class="mode-check">✓</span><div><small>追击 · 争夺 · 决战</small><h3>节点大逃杀</h3><p>沿区域连线追击敌人、争夺会枯竭的资源，并占领需要守住的空投；长期避战者将被暴露。</p><div class="mode-card-stats"><span><b>6–10</b> 生存者</span><span><b>5</b> 战术区域</span><span><b>12–30</b> 回合</span></div><footer><span>主动交战</span><span>约 15–30 分钟</span></footer></div></button>
+            <button class="mode-card" data-mode="TURING_HUNT"><div class="mode-art turing"><span>⌁</span><em>身份混淆实验</em></div><span class="mode-check">✓</span><div><small>伪装 · 识别 · 审讯</small><h3>图灵潜伏局</h3><p>一名真人潜入五名 AI 之间。所有人匿名作答、互相怀疑并投票，真人必须让 AI 误判自己的身份。</p><div class="mode-card-stats"><span><b>1+5</b> 固定阵容</span><span><b>3</b> 回合上限</span><span><b>逐轮</b> 揭示身份</span></div><footer><span>图灵博弈</span><span>约 10–20 分钟</span></footer></div></button>
           </div>
+          <section class="lineup-template-shelf" id="lineup-template-shelf" aria-live="polite">
+            <header><div><span class="kicker">SAVED LINEUPS</span><h3>阵容模板</h3><p>一键复用模型、人格、席位名称和规则。</p></div></header>
+            <div id="lineup-template-list"><span>正在读取阵容模板…</span></div>
+          </section>
           <section class="mode-intelligence" id="mode-intelligence" aria-live="polite">
             <header><div><span class="kicker">MODE INTELLIGENCE</span><h3 id="mode-detail-title">一场可追踪的阵营推理实验</h3></div><span class="mode-difficulty" id="mode-difficulty">策略深度 · 高</span></header>
             <div class="mode-detail-grid">
@@ -114,13 +120,27 @@
             <label>供应商<select id="standalone-provider"><option value="OPENAI">OpenAI</option><option value="DEEPSEEK">DeepSeek</option><option value="QWEN">通义千问</option><option value="DOUBAO">豆包</option><option value="QIANFAN">百度千帆</option><option value="ZHIPU">智谱</option><option value="MOONSHOT">Kimi / Moonshot</option><option value="YI">零一万物</option><option value="MINIMAX">MiniMax</option><option value="HUNYUAN">腾讯混元</option><option value="BAICHUAN">百川智能</option><option value="SILICONFLOW">硅基流动</option><option value="SPARK">讯飞星火</option><option value="OLLAMA">Ollama</option><option value="OPENAI_COMPATIBLE">OpenAI 兼容</option></select></label>
             <label>配置名称<input id="standalone-config-name" value="我的模型" required></label>
             <label>模型名称<input id="standalone-model-name" placeholder="填写供应商当前支持的模型 ID" required></label>
-            <label>Base URL<input id="standalone-base-url" placeholder="可选；自定义主机需由服务端加入白名单"></label>
             <label>API Key<input id="standalone-api-key" type="password" placeholder="Ollama 可留空"></label>
-            <label>Temperature<input id="standalone-temperature" type="number" min="0" max="2" step="0.1" value="0.7"></label>
+            <details class="model-advanced"><summary>高级连接与生成参数</summary><label>Base URL<input id="standalone-base-url" placeholder="可选；自定义主机需由服务端加入白名单"></label><label>Temperature<input id="standalone-temperature" type="number" min="0" max="2" step="0.1" value="0.7"></label><p>仅在供应商要求时修改。自定义地址仍需通过服务端安全校验。</p></details>
             <button class="primary" type="submit">保存模型配置</button>
           </form>
           <aside class="saved-models"><h2>已保存配置</h2><div id="saved-model-list"><p>尚未加载配置</p></div></aside>
         </div>
+        <section class="agent-studio" id="agent-studio">
+          <header><div><span class="kicker">AGENT PERSONA</span><h2>轻量 Agent 人格</h2><p>人格与模型独立组合，只影响表达方式和合法策略偏好。</p></div></header>
+          <div class="agent-studio-grid">
+            <form id="agent-profile-form" class="agent-profile-form">
+              <label>人格名称<input id="agent-profile-name" maxlength="64" value="冷静分析师" required></label>
+              <label>人格描述<textarea id="agent-profile-description" maxlength="512" rows="2" placeholder="这个 Agent 给观众留下的整体印象"></textarea></label>
+              <label>性格标签<input id="agent-profile-traits" maxlength="160" placeholder="冷静, 怀疑, 克制"></label>
+              <div class="agent-form-row"><label>表达风格<input id="agent-profile-style" maxlength="128" value="短句、先给结论再给依据" required></label><label>风险偏好<select id="agent-profile-risk"><option value="CAUTIOUS">谨慎</option><option value="BALANCED" selected>平衡</option><option value="BOLD">激进</option></select></label></div>
+              <label>行为倾向<input id="agent-profile-guidance" maxlength="256" placeholder="例如：信息不足时优先观察，优势时主动施压"></label>
+              <div class="agent-form-row"><label>头像标记<input id="agent-profile-avatar" maxlength="8" value="🧠"></label><label>识别色<input id="agent-profile-color" type="color" value="#8b7cff"></label></div>
+              <button class="primary" type="submit">保存 Agent 人格</button>
+            </form>
+            <aside class="saved-agents"><h3>已保存人格</h3><div id="saved-agent-list"><p>尚未加载人格</p></div></aside>
+          </div>
+        </section>
       </div>
     </section>
   </main>
@@ -163,6 +183,7 @@
     </section>
   </div>
   <div class="toast" id="toast" role="status" aria-live="polite">操作提示</div>
-  <script src="/app.js?v=20260715-modes-auth1"></script>
+  <script type="module" src="/arena-3d.js?v=20260727-3d1"></script>
+  <script src="/app.js?v=20260716-turing1"></script>
 </body>
 </html>

@@ -1,0 +1,24 @@
+{
+  "name": "agent-arena-browser-tests",
+  "private": true,
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/znnnnnnn-wil/Agent-Arena.git"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test:e2e": "playwright test",
+    "test:e2e:functional": "playwright test --grep-invert @visual --workers=4",
+    "test:e2e:visual": "playwright test --grep @visual --workers=1",
+    "test:e2e:update": "playwright test --grep @visual --update-snapshots=all --workers=1"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.61.1"
+  },
+  "dependencies": {
+    "three": "0.180.0"
+  }
+}
