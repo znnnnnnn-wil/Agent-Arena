@@ -2,7 +2,11 @@ name: ci
 
 on:
   push:
+    branches:
+      - main
   pull_request:
+    branches:
+      - main
 
 jobs:
   verify:
@@ -54,4 +58,4 @@ jobs:
           name: playwright-report
           path: playwright-report/
           if-no-files-found: ignore
-          retention-days: 7
+          retention-days: 1
