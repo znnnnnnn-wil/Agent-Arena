@@ -1,11 +1,11 @@
-FROM maven:3.9.11-eclipse-temurin-17@sha256:e4a7ace3dc0d645ed97f8d9ad0b0d3f0b14fa8d150138f27f116d7105a639b82 AS build
+FROM maven:3.9.15-eclipse-temurin-26@sha256:029a8e2838ae68238ffb8be407cddbb3f07d4d839c60c6f26c619a69fd184531 AS build
 WORKDIR /workspace
 COPY pom.xml ./
 RUN mvn --batch-mode dependency:go-offline
 COPY src ./src
 RUN mvn --batch-mode -DskipTests package
 
-FROM eclipse-temurin:17-jre@sha256:13cc28a6cc72a38ce1f00c906be3580c1a3e604b8984d694f369a96742abc93b
+FROM eclipse-temurin:25-jre@sha256:f9e65324a37f28209ce7dd0e5149a7aa954520ed936fb87813cf6ded2400a112
 WORKDIR /app
 COPY --from=build --chown=10001:10001 /workspace/target/agentArena-0.0.1-SNAPSHOT.jar /app/agent-arena.jar
 USER 10001
