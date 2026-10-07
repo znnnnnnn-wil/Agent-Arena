@@ -21,9 +21,9 @@ public class GameSummaryResponse {
     /** 获胜方或获胜者标识。 */
     private String winner;
     /** 对局记录的事件总数。 */
-    private Integer eventCount;
+    private Long eventCount;
     /** 对局中的淘汰次数。 */
-    private Integer eliminationCount;
+    private Long eliminationCount;
     /** 用于展示的关键事件摘要。 */
     private List<String> keyEvents;
 }

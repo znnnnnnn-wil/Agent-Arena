@@ -19,6 +19,70 @@ import static org.junit.jupiter.api.Assertions.*;
 class BattleRoyaleGameEngineTest {
 
     @Test
+    void overkillOnlyCreditsActualHealthRemoved() {
+        var state = state();
+        state.findPlayer(2L).setHealth(5);
+        var result = new BattleRoyaleGameEngine().execute(state,
+                new BattleRoyaleAction(1L, BattleActionType.ATTACK, 2L, null));
+        assertEquals(5, state.findPlayer(1L).getTotalDamage());
+        assertEquals(10, BattleRoyaleRules.scoreBreakdown(state.findPlayer(1L)).get("damage"));
+        var event = result.events().stream().filter(e -> "BATTLE_ACTION_EXECUTED".equals(e.type())).findFirst().orElseThrow();
+        assertEquals(5, event.payload().get("creditedDamage"));
+        assertEquals(10, event.payload().get("damageScoreGain"));
+    }
+
+    @Test
+    void revivalCannotResetTargetDamageCreditBudget() {
+        var state = state();
+        var target = state.findPlayer(2L);
+        target.setScoredDamageReceived(95);
+        target.setHealth(5);
+        var engine = new BattleRoyaleGameEngine();
+        engine.execute(state, new BattleRoyaleAction(1L, BattleActionType.ATTACK, 2L, null));
+        assertEquals(100, target.getScoredDamageReceived());
+        target.markAlive(30);
+        engine.execute(state, new BattleRoyaleAction(3L, BattleActionType.ATTACK, 2L, null));
+        assertEquals(0, state.findPlayer(3L).getTotalDamage());
+        assertEquals(100, target.getScoredDamageReceived());
+        assertTrue(target.getHealth() < 30);
+    }
+
+    @Test
+    void repeatedHidingIsDetectedButChangingActionResetsIt() {
+        var state = state();
+        var engine = new BattleRoyaleGameEngine();
+        var actor = state.findPlayer(1L);
+        actor.setFood(20);
+        actor.setWater(20);
+        for (int i = 0; i < 2; i++) {
+            engine.execute(state, new BattleRoyaleAction(1L, BattleActionType.HIDE, null, null));
+            assertTrue(actor.isHidden());
+        }
+        var detected = engine.execute(state, new BattleRoyaleAction(1L, BattleActionType.HIDE, null, null));
+        assertFalse(actor.isHidden());
+        assertTrue(actor.isExposed());
+        assertTrue(detected.events().stream().anyMatch(e -> "REPEATED_HIDING".equals(e.payload().get("reason"))
+                && "A".equals(e.publicPayload().get("region"))));
+        engine.execute(state, new BattleRoyaleAction(1L, BattleActionType.GUARD, null, null));
+        engine.execute(state, new BattleRoyaleAction(1L, BattleActionType.HIDE, null, null));
+        assertTrue(actor.isHidden());
+        assertFalse(actor.isExposed());
+    }
+
+    @Test
+    void shortGameHasFinalZoneBeforeTimeLimitAndConsistentForecast() {
+        for (int stage = 1; stage < 5; stage++) {
+            int round = BattleRoyaleRules.nextShrinkRound(stage, 12);
+            assertEquals(1 + stage * 2, round);
+            assertEquals(stage, BattleRoyaleRules.ringStageForRound(round - 1, 12));
+            assertEquals(stage + 1, BattleRoyaleRules.ringStageForRound(round, 12));
+        }
+        assertEquals(5, BattleRoyaleRules.ringStageForRound(9, 12));
+        assertEquals(-1, BattleRoyaleRules.nextShrinkRound(5, 12));
+        assertEquals(4, BattleRoyaleRules.nextShrinkRound(1, 20));
+    }
+
+    @Test
     @DisplayName("attack: 同一区域攻击应扣除生命值")
     void testAttack() {
         BattleRoyaleGameState state = state();
@@ -66,6 +130,7 @@ class BattleRoyaleGameEngineTest {
     @DisplayName("zone: 第四轮开始第一次缩圈并造成圈外伤害")
     void testFirstZoneShrink() {
         BattleRoyaleGameState state = state();
+        state.setMaxRounds(20);
         state.setRoundNo(3);
         state.setActionsInRound(2);
         String firstUnsafe = BattleRoyaleRules.ringOrder(state.getRegions(), state.getRandomSeed()).get(4);
@@ -80,6 +145,7 @@ class BattleRoyaleGameEngineTest {
         assertEquals(92, state.findPlayer(3L).getHealth());
         assertTrue(result.events().stream().anyMatch(event -> "BATTLE_ZONE_UPDATED".equals(event.type())));
         assertNotNull(state.getSupplyDropRegion());
+        assertNotEquals(state.getSafeRegions().get(state.getSafeRegions().size() - 1), state.getSupplyDropRegion());
         assertTrue(result.events().stream().anyMatch(event -> "BATTLE_SUPPLY_DROP".equals(event.type())));
     }
 
@@ -161,6 +227,101 @@ class BattleRoyaleGameEngineTest {
         assertNotNull(result);
         assertTrue(state.alivePlayers().stream().anyMatch(BattlePlayerState::isExposed));
         assertTrue(result.events().stream().anyMatch(event -> "BATTLE_PLAYER_EXPOSED".equals(event.type())));
+    }
+
+    @Test
+    void guardReducesOnlyTheNextHitAndExpiresOnOwnAction() {
+        var engine = new BattleRoyaleGameEngine();
+        var baseline = state();
+        var defended = state();
+        defended.findPlayer(2L).setGuarded(true);
+        engine.execute(baseline, new BattleRoyaleAction(1L, BattleActionType.ATTACK, 2L, null));
+        engine.execute(defended, new BattleRoyaleAction(1L, BattleActionType.ATTACK, 2L, null));
+        assertEquals(8, defended.findPlayer(2L).getHealth() - baseline.findPlayer(2L).getHealth());
+        assertFalse(defended.findPlayer(2L).isGuarded());
+        defended.findPlayer(2L).setGuarded(true);
+        engine.execute(defended, new BattleRoyaleAction(2L, BattleActionType.REST, null, null));
+        assertFalse(defended.findPlayer(2L).isGuarded());
+    }
+
+    @Test
+    void guardCannotFarmPermanentArmor() {
+        var state = state();
+        new BattleRoyaleGameEngine().execute(state, new BattleRoyaleAction(1L, BattleActionType.GUARD, null, null));
+        assertEquals(0, state.findPlayer(1L).getArmor());
+        new BattleRoyaleGameEngine().execute(state, new BattleRoyaleAction(1L, BattleActionType.GUARD, null, null));
+        assertEquals(0, state.findPlayer(1L).getArmor());
+        assertTrue(state.findPlayer(1L).isGuarded());
+    }
+
+    @Test
+    void regionCoverReducesIncomingDamage() {
+        var engine = new BattleRoyaleGameEngine();
+        for (String region : List.of("B", "D")) {
+            var baseline = state();
+            var covered = state();
+            covered.getPlayers().forEach(player -> player.setRegion(region));
+            engine.execute(baseline, new BattleRoyaleAction(1L, BattleActionType.ATTACK, 2L, null));
+            engine.execute(covered, new BattleRoyaleAction(1L, BattleActionType.ATTACK, 2L, null));
+            assertEquals(BattleRegionRules.profile(region).coverReduction(),
+                    covered.findPlayer(2L).getHealth() - baseline.findPlayer(2L).getHealth());
+        }
+    }
+
+    @Test
+    void searchingForestStaysQuietButVillageSearchAndAttackExposeActor() {
+        var engine = new BattleRoyaleGameEngine();
+        var forest = state();
+        forest.findPlayer(1L).setRegion("B");
+        engine.execute(forest, new BattleRoyaleAction(1L, BattleActionType.SEARCH, null, null));
+        assertFalse(forest.findPlayer(1L).isExposed());
+        var village = state();
+        engine.execute(village, new BattleRoyaleAction(1L, BattleActionType.SEARCH, null, null));
+        assertTrue(village.findPlayer(1L).isExposed());
+        engine.execute(village, new BattleRoyaleAction(1L, BattleActionType.HIDE, null, null));
+        assertFalse(village.findPlayer(1L).isExposed());
+        engine.execute(village, new BattleRoyaleAction(1L, BattleActionType.ATTACK, 2L, null));
+        assertTrue(village.findPlayer(1L).isExposed());
+    }
+
+    @Test
+    void campRestRestoresThreeMoreHealth() {
+        var engine = new BattleRoyaleGameEngine();
+        var village = state();
+        var camp = state();
+        village.findPlayer(1L).setHealth(50);
+        camp.findPlayer(1L).setHealth(50);
+        camp.findPlayer(1L).setRegion("E");
+        engine.execute(village, new BattleRoyaleAction(1L, BattleActionType.REST, null, null));
+        engine.execute(camp, new BattleRoyaleAction(1L, BattleActionType.REST, null, null));
+        assertEquals(3, camp.findPlayer(1L).getHealth() - village.findPlayer(1L).getHealth());
+    }
+
+    @Test
+    void publicWorldUsesActualSafeRegionsAndScoreBreakdownAddsUp() {
+        var state = state();
+        state.setRingStage(3);
+        state.setSafeRegions(List.of("B", "D", "E"));
+        state.setSupplyDropRegion("D");
+        var world = com.zn.agentarena.modules.game.dto.response.BattleWorldResponse.from(state);
+        assertEquals(List.of("B", "D", "E"), world.safeRegions());
+        assertEquals("D", world.supplyDropRegion());
+        assertEquals(6, world.regionProfiles().get("D").coverReduction());
+        assertEquals(BattleRoyaleRules.survivalScore(state.findPlayer(1L)),
+                BattleRoyaleRules.scoreBreakdown(state.findPlayer(1L)).values().stream().mapToInt(Integer::intValue).sum());
+    }
+
+    @Test
+    void roundLimitResultExplainsWhyAndHowWinnerWasSelected() {
+        var state = state();
+        state.setRoundNo(state.getMaxRounds());
+        state.findPlayer(2L).setKills(2);
+        var events = new java.util.ArrayList<com.zn.agentarena.modules.game.engine.EngineEvent>();
+        new BattleRoyaleGameEngine().finishIfNeeded(state, events);
+        var finish = events.stream().filter(event -> "BATTLE_FINISHED".equals(event.type())).findFirst().orElseThrow();
+        assertEquals("MAX_ROUNDS_SCORE", finish.payload().get("reason"));
+        assertEquals(2L, finish.payload().get("winnerPlayerId"));
+        assertEquals(BattleRoyaleRules.scoreBreakdown(state.findPlayer(2L)), finish.payload().get("scoreBreakdown"));
     }
 
     private BattleRoyaleGameState state() {

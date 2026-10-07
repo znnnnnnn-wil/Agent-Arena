@@ -11,6 +11,8 @@ test('狼人杀模式持续复用并更新真实 WebGL 3D 舞台', async ({ page
   await expect(page.locator('[data-arena-3d="werewolf"] canvas')).toBeVisible();
   await expect(page.locator('[data-arena-3d="werewolf"] .arena3d-label')).toHaveCount(8);
   await expect(page.locator('[data-arena-3d="werewolf"]')).toHaveAttribute('data-arena3d-assets', '8', { timeout: 15000 });
+  // The steps below inject states directly, so finish persisted refreshes before changing the phase.
+  await page.evaluate(async () => { liveEventSource?.close(); await loadCurrentGame(); });
   await expect(page.locator('[data-arena-3d="werewolf"] .arena3d-moment-card')).toHaveAttribute('data-action', 'talk');
   await expect(page.locator('[data-arena-3d="werewolf"]')).toHaveAttribute('data-arena3d-relation', 'SUSPECT');
   await expect(page.locator('[data-arena-3d="werewolf"]')).toHaveAttribute('data-arena3d-relation-count', '3');
@@ -95,7 +97,7 @@ test('图灵模式挂载真实 WebGL 3D 舞台', async ({ page }) => {
   expect(runtimeErrors).toEqual([]);
 });
 
-test('大逃杀第三阶段挂载协作信标并识别社会事件', async ({ page }) => {
+test('大逃杀第三阶段挂载协作信标并识别社会事件', async ({ page }, testInfo) => {
   const runtimeErrors = [];
   page.on('pageerror', (error) => runtimeErrors.push(error.message));
   await page.emulateMedia({ reducedMotion: 'no-preference' });
@@ -121,6 +123,56 @@ test('大逃杀第三阶段挂载协作信标并识别社会事件', async ({ pa
   await expect(arena).toHaveAttribute('data-arena3d-stage3', 'social-simulation');
   await expect(arena.locator('.arena3d-moment-card')).toHaveAttribute('data-action', 'contribute');
   await expect(arena).toHaveAttribute('data-arena3d-assets', '8', { timeout: 15000 });
+  const worldUpdates = await page.evaluate(({ battlePlayers, battleEvents }) => {
+    const host = document.querySelector('[data-arena-3d="battle"]');
+    const payload = { game: { id: 88, mode: 'BATTLE_ROYALE', currentRound: 4,
+      battleWorld: { ringStage: 2, safeRegions: ['B', 'C', 'D', 'E'], supplyDropRegion: 'D' } },
+      players: battlePlayers, events: battleEvents };
+    const stage = window.AgentArena3D.mount(host, 'battle', payload);
+    const before = { safe: host.dataset.arena3dSafeRegions, supply: host.dataset.arena3dSupplyRegion,
+      unsafeA: stage.battleDangerMarkers.get('A').warning.visible };
+    payload.game.battleWorld = { ringStage: 3, safeRegions: ['B', 'D', 'E'], supplyDropRegion: 'E' };
+    stage.update(payload);
+    const moved = { safe: host.dataset.arena3dSafeRegions, supply: host.dataset.arena3dSupplyRegion,
+      unsafeC: stage.battleDangerMarkers.get('C').warning.visible,
+      x: stage.battleSupplyBeacon.position.x, expectedX: stage.battleRegionPositions.E.x };
+    payload.game.battleWorld.supplyDropRegion = null;
+    stage.update(payload);
+    const removed = { supply: host.dataset.arena3dSupplyRegion, visible: stage.battleSupplyBeacon.visible };
+    const fallback = window.BattleWorld.resolve({}, [{ eventType: 'BATTLE_ZONE_UPDATED',
+      payload: { ringStage: 3, safeRegions: ['B', 'D', 'E'] } }]);
+    return { before, moved, removed, fallbackSafe: fallback.safeRegions };
+  }, { battlePlayers: players, battleEvents: events });
+  expect(worldUpdates.before).toEqual({ safe: 'B,C,D,E', supply: 'D', unsafeA: true });
+  expect(worldUpdates.moved.safe).toBe('B,D,E');
+  expect(worldUpdates.moved.supply).toBe('E');
+  expect(worldUpdates.moved.unsafeC).toBe(true);
+  expect(worldUpdates.moved.x).toBe(worldUpdates.moved.expectedX);
+  expect(worldUpdates.removed).toEqual({ supply: '', visible: false });
+  expect(worldUpdates.fallbackSafe).toEqual(['B', 'D', 'E']);
+  if (testInfo.project.name.includes('mobile')) {
+    const distance = await page.evaluate(({ battlePlayers, battleEvents }) => {
+      const host = document.querySelector('[data-arena-3d="battle"]');
+      const payload = { game: { id: 88, mode: 'BATTLE_ROYALE', currentRound: 4 }, players: battlePlayers, events: battleEvents };
+      const stage = window.AgentArena3D.mount(host, 'battle', payload);
+      payload.players = battlePlayers.map((player, index) => index === 0 ? { ...player, region: 'D' } : player);
+      stage.update(payload);
+      return stage.agents.get(String(battlePlayers[0].id)).position.distanceTo(stage.battlePositionForPlayer(payload.players[0], payload.players));
+    }, { battlePlayers: players, battleEvents: events });
+    expect(distance).toBeLessThan(0.001);
+  }
+  await page.locator('.battle-rules-panel summary').click();
+  await expect(page.locator('.battle-rules-panel')).toContainText('减免下一次受击8点伤害');
+  await expect(page.locator('.battle-rules-panel')).toContainText('移动路线');
+  const resultText = await page.evaluate(() => {
+    const html = finishedPresentation({ id: 88, mode: 'BATTLE_ROYALE', status: 'FINISHED', currentRound: 10 },
+      [{ primary: { eventType: 'BATTLE_FINISHED', payload: { winnerName: 'Alpha', reason: 'MAX_ROUNDS_SCORE',
+        score: 240, kills: 1, scoreBreakdown: { health: 80, armor: 10, supplies: 20, equipment: 10, kills: 120, damage: 0 } } } }], []);
+    const element = document.createElement('div'); element.innerHTML = html;
+    return element.textContent;
+  });
+  expect(resultText).toContain('达到回合上限，按生存积分获胜');
+  expect(resultText).toContain('击杀 120分');
   expect(runtimeErrors).toEqual([]);
 });
 
@@ -180,7 +232,17 @@ test('@visual 大逃杀挂载 3D 岛屿、战斗轨迹与玩家标签', async ({
   await expect(page.locator('.battle-map .arena3d-label')).toHaveCount(8);
   await expect(page.locator('[data-arena-3d="battle"]')).toHaveAttribute('data-arena3d-assets', '8', { timeout: 15000 });
   await expect(page.locator('.battle-map .battle-live-feed')).toContainText('攻击');
+  await expect(page.locator('[data-arena-3d="battle"]')).toHaveAttribute('data-arena3d-battle-style', 'survivors');
+  await expect(page.locator('[data-arena-3d="battle"]')).toHaveAttribute('data-arena3d-map-style', 'survival-island');
+  await expect(page.locator('[data-arena-3d="battle"]')).toHaveAttribute('data-arena3d-scenery', 'ready', { timeout: 15000 });
+  await expect(page.locator('[data-arena-3d="battle"]')).toHaveAttribute('data-arena3d-asset-mode', 'external');
   expect(runtimeErrors).toEqual([]);
+  // Reduced-motion stages have no continuous render loop; resizing must still repaint them.
+  const viewport = page.viewportSize();
+  await page.setViewportSize({ ...viewport, width: viewport.width - 12 });
+  await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  await page.setViewportSize(viewport);
+  await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
   await testInfo.attach('battle-royale-3d-stage', {
     body: await page.locator('.battle-map').screenshot(),
     contentType: 'image/png'

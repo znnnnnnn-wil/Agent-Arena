@@ -24,6 +24,25 @@
   pointer-events: none;
 }
 
+.battle-map .arena3d-label { min-width: 88px; gap: 5px; padding: 5px 7px; }
+.battle-map .arena3d-label b { font-size: 11px; }
+.battle-map .arena3d-label small { font-size: 9px; }
+
+@media (min-width: 721px) {
+  .battle-map.arena3d-active > .map-ring-status {
+    top: 12px; left: 12px; right: auto; bottom: auto;
+    width: 172px; transform: none; text-align: left;
+  }
+  .battle-map.arena3d-active > .battle-live-feed {
+    top: auto; bottom: 12px; left: 12px; right: auto;
+    width: 252px; max-width: 252px; transform: none;
+  }
+}
+
+@media (max-width: 720px) {
+  .battle-map .arena3d-label { min-width: 0; padding: 3px; }
+}
+
 .arena3d-label {
   position: absolute;
   top: 0;
@@ -162,6 +181,11 @@
 
 /* 大逃杀：WebGL 场景接管地图，现有状态组件继续充当 HUD。 */
 .battle-map.arena3d-active { min-height: 650px; isolation: isolate; }
+.battle-rules-panel { margin-top: 12px; padding: 12px 16px; border: 1px solid #2a4145; border-radius: 10px; background: #101b20; color: #a9bbc0; font-size: 12px; }
+.battle-rules-panel summary { cursor: pointer; color: #dce8d5; }
+.battle-rules-panel p { margin: 10px 0; line-height: 1.7; }
+.battle-rules-panel div { display: flex; flex-wrap: wrap; gap: 8px; }
+.battle-rules-panel div span { padding: 5px 8px; border-radius: 5px; background: #233239; }
 .battle-map.arena3d-active > .map-grid-lines,
 .battle-map.arena3d-active > .battle-storm-vignette,
 .battle-map.arena3d-active > .battle-action-layer,

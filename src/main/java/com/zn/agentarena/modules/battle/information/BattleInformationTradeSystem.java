@@ -16,6 +16,10 @@ public class BattleInformationTradeSystem {
         if (decision == null || decision.rumorId() == null || decision.resourceType() == null || decision.amount() == null || decision.amount() <= 0 || decision.amount() > 99 || Objects.equals(seller,buyer)) return List.of();
         BattleRumor rumor=rumorSystem.find(state,decision.rumorId()); BattlePlayerState s=state.findPlayer(seller), b=state.findPlayer(buyer);
         if (rumor==null || !rumor.getKnownByPlayerIds().contains(seller) || s==null || b==null || !s.isActive() || !b.isActive()) return List.of();
+        if (rumor.getKnownByPlayerIds().contains(buyer) || state.getInformationTradeProposals().stream()
+                .anyMatch(p -> Objects.equals(p.getSellerPlayerId(), seller) && Objects.equals(p.getBuyerPlayerId(), buyer)
+                        && Objects.equals(p.getRumorId(), rumor.getRumorId())
+                        && p.getStatus() == BattleInformationTradeStatus.PROPOSED)) return List.of();
         BattleResourceType type; try { type=BattleResourceType.valueOf(decision.resourceType().trim().toUpperCase(Locale.ROOT)); } catch(IllegalArgumentException e){return List.of();}
         BattleInformationTradeProposal p=BattleInformationTradeProposal.builder().tradeId("info-trade-"+state.getGameId()+"-"+(state.getSequenceNo()+1)).sellerPlayerId(seller).buyerPlayerId(buyer).rumorId(rumor.getRumorId()).price(new BattleResourceAmount(type,decision.amount())).createdRound(state.getRoundNo()).expiresRound(state.getRoundNo()+3).status(BattleInformationTradeStatus.PROPOSED).knownByPlayerIds(new ArrayList<>(List.of(seller,buyer))).build();
         state.getInformationTradeProposals().add(p); memorySystem.rememberFact(state,buyer,BattleMemoryType.INFORMATION_TRADE_PROPOSED,seller,buyer,"有人向我出售一条传闻",80,null);
@@ -24,9 +28,18 @@ public class BattleInformationTradeSystem {
 
     public List<EngineEvent> accept(BattleRoyaleGameState state, Long buyer, Long seller, String id) {
         BattleInformationTradeProposal p=pending(state,buyer,seller,id); if(p==null)return List.of(); BattlePlayerState b=state.findPlayer(buyer),s=state.findPlayer(p.getSellerPlayerId()); BattleRumor r=rumorSystem.find(state,p.getRumorId());
-        String failure=null; if(b==null||s==null||!b.isActive()||!s.isActive())failure="PLAYER_UNAVAILABLE"; else if(!Objects.equals(b.getRegion(),s.getRegion()))failure="NOT_SAME_REGION"; else if(r==null||!r.getKnownByPlayerIds().contains(s.getPlayerId()))failure="INFORMATION_UNAVAILABLE"; else if(!BattleResourceInventory.has(b,p.getPrice()))failure="BUYER_RESOURCE_MISSING";
+        String failure=null; if(b==null||s==null||!b.isActive()||!s.isActive())failure="PLAYER_UNAVAILABLE"; else if(!Objects.equals(b.getRegion(),s.getRegion()))failure="NOT_SAME_REGION"; else if(r==null||!r.getKnownByPlayerIds().contains(s.getPlayerId()))failure="INFORMATION_UNAVAILABLE"; else if(r.getKnownByPlayerIds().contains(buyer))failure="BUYER_ALREADY_KNOWS_INFORMATION"; else if(!BattleResourceInventory.has(b,p.getPrice()))failure="BUYER_RESOURCE_MISSING";
         if(failure!=null){p.setStatus(BattleInformationTradeStatus.FAILED);p.setResolvedRound(state.getRoundNo());p.setFailureReason(failure);return List.of(event(state,"BATTLE_INFORMATION_TRADE_FAILED",buyer,p,"情报交易因条件变化失败"));}
-        BattleResourceInventory.remove(b,p.getPrice()); BattleResourceInventory.add(s,p.getPrice()); if(!r.getKnownByPlayerIds().contains(buyer))r.getKnownByPlayerIds().add(buyer); p.setStatus(BattleInformationTradeStatus.COMPLETED);p.setResolvedRound(state.getRoundNo()); memorySystem.rememberFact(state,buyer,BattleMemoryType.INFORMATION_TRADE_COMPLETED,s.getPlayerId(),buyer,"购买了未经证实的情报："+r.getClaim(),r.getConfidence(),null); return List.of(event(state,"BATTLE_INFORMATION_TRADE_COMPLETED",buyer,p,"一项私密情报交易已原子完成"));
+        BattleResourceInventory.remove(b,p.getPrice());
+        BattleResourceInventory.add(s,p.getPrice());
+        r.getKnownByPlayerIds().add(buyer);
+        p.setStatus(BattleInformationTradeStatus.COMPLETED);
+        p.setResolvedRound(state.getRoundNo());
+        memorySystem.rememberFact(state,buyer,BattleMemoryType.INFORMATION_TRADE_COMPLETED,
+                s.getPlayerId(),buyer,"购买了一条未经证实的情报",80,null);
+        memorySystem.rememberClaim(state,buyer,BattleMemoryType.RUMOR_HEARD,s.getPlayerId(),r.getSubjectPlayerId(),
+                "购买的传闻 " + r.getRumorId() + "：" + r.getClaim(),65,null,r.getConfidence());
+        return List.of(event(state,"BATTLE_INFORMATION_TRADE_COMPLETED",buyer,p,"一项私密情报交易已原子完成"));
     }
     public List<EngineEvent> reject(BattleRoyaleGameState state,Long buyer,Long seller,String id){BattleInformationTradeProposal p=pending(state,buyer,seller,id);if(p==null)return List.of();p.setStatus(BattleInformationTradeStatus.REJECTED);p.setResolvedRound(state.getRoundNo());return List.of(event(state,"BATTLE_INFORMATION_TRADE_REJECTED",buyer,p,"一项私密情报交易被拒绝"));}
     public List<EngineEvent> expire(BattleRoyaleGameState state){List<EngineEvent> e=new ArrayList<>();for(var p:state.getInformationTradeProposals())if(p.getStatus()==BattleInformationTradeStatus.PROPOSED&&state.getRoundNo()>=p.getExpiresRound()){p.setStatus(BattleInformationTradeStatus.EXPIRED);p.setResolvedRound(state.getRoundNo());e.add(event(state,"BATTLE_INFORMATION_TRADE_EXPIRED",null,p,"一项私密情报交易已过期"));}return e;}

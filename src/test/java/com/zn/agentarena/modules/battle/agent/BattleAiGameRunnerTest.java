@@ -120,6 +120,23 @@ class BattleAiGameRunnerTest {
         assertTrue(target.getHealth() < 100);
     }
 
+    @Test
+    void omittedConfidenceDoesNotAbortLegalModelAction() {
+        ModelGateway gateway = mock(ModelGateway.class);
+        when(gateway.generateStructured(any(), any(), eq(BattleCandidateDecision.class)))
+                .thenReturn(new BattleCandidateDecision("T03", null, null, "搜索补给", null));
+        var actor = player(1L);
+        var state = BattleRoyaleGameState.builder().gameId(1L).maxRounds(20).roundNo(1)
+                .randomSeed(42L).safeRegions(List.of("A", "B", "C", "D", "E"))
+                .players(List.of(actor, player(2L))).build();
+        var config = new ModelRuntimeConfig(ModelProvider.QWEN, "test", null,
+                "test-key", 0.4, 256, Duration.ofSeconds(5), 0);
+        var result = new BattleAiGameRunner(gateway, new BattleAgentContextBuilder()).runNextTurn(state, actor, config);
+        assertEquals("MODEL", result.events().get(0).payload().get("source"));
+        assertEquals("SEARCH", result.events().get(0).payload().get("action"));
+        assertEquals(0, result.events().get(0).payload().get("confidence"));
+    }
+
     private BattlePlayerState player(Long id) {
         return BattlePlayerState.builder().playerId(id).displayName(id + "号幸存者")
                 .region("A").health(100).food(5).water(5).alive(true).build();

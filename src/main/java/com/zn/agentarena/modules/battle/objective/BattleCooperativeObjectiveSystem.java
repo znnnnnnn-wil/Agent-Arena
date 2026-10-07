@@ -50,7 +50,7 @@ public class BattleCooperativeObjectiveSystem {
         objective.getContributed().merge(type, amount, Integer::sum);
         objective.getContributionByPlayer().merge(actorId, amount, Integer::sum);
         int immediateArmor = Math.min(6, amount * 2);
-        actor.setArmor(Math.min(BattleRoyaleRules.LOOT_ARMOR_CAP, actor.getArmor() + immediateArmor));
+        actor.setArmor(BattleRoyaleRules.addArmor(actor.getArmor(), immediateArmor, BattleRoyaleRules.LOOT_ARMOR_CAP));
         memorySystem.rememberFact(state, actorId, BattleMemoryType.OBJECTIVE_CONTRIBUTED, actorId, null,
                 "向公共信标贡献 " + type + " x" + amount, 100, objective.getRegion());
         List<EngineEvent> events = new ArrayList<>();
@@ -65,7 +65,7 @@ public class BattleCooperativeObjectiveSystem {
             for (Long id : objective.getContributionByPlayer().keySet()) {
                 BattlePlayerState contributor = state.findPlayer(id);
                 if (contributor != null && !contributor.isEliminated()) {
-                    contributor.setArmor(Math.min(BattleRoyaleRules.LOOT_ARMOR_CAP, contributor.getArmor() + 10));
+                    contributor.setArmor(BattleRoyaleRules.addArmor(contributor.getArmor(), 10, BattleRoyaleRules.LOOT_ARMOR_CAP));
                 }
                 memorySystem.rememberFact(state, id, BattleMemoryType.OBJECTIVE_COMPLETED, id, null,
                         "协作信标完成，获得护甲奖励", 100, objective.getRegion());

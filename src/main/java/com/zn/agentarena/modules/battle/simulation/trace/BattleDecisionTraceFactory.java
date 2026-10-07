@@ -21,7 +21,14 @@ public final class BattleDecisionTraceFactory {
         List<Long> downed = observation.visiblePlayers().stream()
                 .filter(p -> p.lifeStatus() == BattlePlayerLifeStatus.DOWNED).map(p -> p.playerId()).toList();
         Map<String,Integer> resources = Map.of("health", self.health(), "food", self.food(), "water", self.water(),
-                "ammo", self.ammo(), "armor", self.armor(), "medkits", self.medkits());
+                "ammo", self.ammo(), "armor", self.armor(), "medkits", self.medkits(),
+                "armed", self.armed() ? 1 : 0,
+                "visibleActiveNonAllies", (int) observation.visiblePlayers().stream()
+                    .filter(p -> p.lifeStatus() == BattlePlayerLifeStatus.ALIVE)
+                    .filter(p -> context.social().alliances().stream().noneMatch(a ->
+                        a.getStatus() == com.zn.agentarena.modules.battle.alliance.BattleAllianceStatus.ACTIVE
+                        && a.includes(actor.getPlayerId()) && a.includes(p.playerId())))
+                    .count());
 
         List<String> objectives = context.social().cooperativeObjectives().stream()
                 .map(o -> o.getObjectiveId() + "@" + o.getRegion() + ":" + o.getStatus() + ":deadline=" + o.getDeadlineRound())

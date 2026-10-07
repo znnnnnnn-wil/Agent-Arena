@@ -108,6 +108,8 @@ npm run test:e2e:visual
 
 视觉测试分别维护 desktop 与 mobile Chromium 基线。界面有意变化后运行 `npm run test:e2e:update` 更新基线，再运行 `npm run test:e2e:visual` 审核。
 
+对局列表翻页、回放游标与实时重连行为见 [读取接口说明](docs/API_READS.md)。
+
 ## 运行约束
 
 - 单次模型调用默认超时 25 秒，默认不自动重试；

@@ -79,7 +79,7 @@ public class MatchProjectionService {
     private MatchProjectionResponse project(Game game) {
         List<GamePlayer> players = gamePlayerMapper.selectListByQuery(QueryWrapper.create()
                 .eq(GamePlayer::getGameId, game.getId()).orderBy(GamePlayer::getSeatNo, true));
-        return projector.project(game.getId(), game.getMode(), eventRecorder.listRecentEvents(game.getId(), 5_000), players);
+        return projector.project(game.getId(), game.getMode(), eventRecorder.listAllEvents(game.getId()), players);
     }
 
     private HighlightClipResponse findClip(MatchProjectionResponse projection, String clipId) {

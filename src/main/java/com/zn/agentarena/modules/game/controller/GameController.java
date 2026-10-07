@@ -44,8 +44,10 @@ public class GameController {
      * @param userId 当前认证用户的标识
      * @return 游戏列表
      */
-    public Response<List<GameResponse>> list(@AuthenticationPrincipal Long userId) {
-        return Response.success(gameService.listGames(userId));
+    public Response<List<GameResponse>> list(@AuthenticationPrincipal Long userId,
+                                             @RequestParam(defaultValue = "0") @Min(0) @Max(100000) int page,
+                                             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size) {
+        return Response.success(gameService.listGames(userId, page, size));
     }
 
     /** 创建一局标准狼人杀。 */

@@ -103,6 +103,11 @@ public class GameServiceImpl implements IGameService {
         return gameReadService.listOwned(userId);
     }
 
+    @Override
+    public List<GameResponse> listGames(Long userId, int page, int size) {
+        return gameReadService.listOwned(userId, page, size);
+    }
+
     /** 创建狼人杀游戏及其 AI 玩家。 */
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -600,7 +605,9 @@ public class GameServiceImpl implements IGameService {
                                     com.zn.agentarena.modules.game.engine.EngineResult<BattleRoyaleGameState> result,
                                     long previousSequence) {
         for (int i = 0; i < result.events().size(); i++) {
-            eventRecorder.record(game.getId(), state.getRoundNo(), "ROUND", previousSequence + 1 + i,
+            Object eventRound = result.events().get(i).payload().get("roundNo");
+            eventRecorder.record(game.getId(), eventRound instanceof Number value ? value.intValue() : state.getRoundNo(),
+                    "ROUND", previousSequence + 1 + i,
                     result.events().get(i));
         }
         game.setStatus(battleGameEngine.isFinished(state) ? GameStatus.FINISHED : GameStatus.RUNNING);

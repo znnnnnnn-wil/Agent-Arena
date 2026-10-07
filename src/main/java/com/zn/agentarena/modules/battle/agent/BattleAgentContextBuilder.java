@@ -56,6 +56,10 @@ public class BattleAgentContextBuilder {
                 .append(", turnIndex=").append(world.turnIndex())
                 .append(", remainingPlayers=").append(world.remainingPlayers()).append("\n")
                 .append("地图连接: ").append(world.topology()).append("\n")
+                .append("决赛计划: 距离停止轮次还有 ").append(Math.max(0, world.maxRounds() - world.roundNo()))
+                .append("轮；剩余区域数=").append(world.safeRegions().size())
+                .append("。联盟仍按个人胜负结算；GUARD只挡一次伤害，HIDE只暂时降低被发现概率，均不积累护甲或积分。")
+                .append("应结合自己的资源、可见对手和剩余轮次比较争夺装备、交战、治疗与撤离的实际收益。\n")
                 .append("你此刻确实看见的其他玩家:\n");
         if (observation.visiblePlayers().isEmpty()) prompt.append("- 无\n");
         for (ObservedBattlePlayer player : observation.visiblePlayers()) {
@@ -85,7 +89,8 @@ public class BattleAgentContextBuilder {
                 .append("LOCAL 只有当前区域玩家能听见；PUBLIC 是全局无线电；PRIVATE 只有双方能读取。content 最长240字符。\n")
                 .append("联盟不会禁止你攻击盟友，但主动攻击或处决 ACTIVE 盟友会被系统判定为背叛。你也可以先 LEAVE_ALLIANCE。\n")
                 .append("承诺不会自动履行；必须主动使用 FULFILL_PROMISE，逾期会被判定违约。交易在接受时重新验证资源并原子执行。\n")
-                .append("执行顺序固定为：战术动作及代谢 → communication → socialAction → 目标与期限结算；MOVE 后 LOCAL 消息和同区社会动作发生在目的地。\n")
+                .append("执行顺序固定为：战术动作及代谢 → communication → socialAction → 私人目标 → 轮末缩圈与环境伤害 → 期限与胜负结算；MOVE 后 LOCAL 消息和同区社会动作发生在目的地。\n")
+                .append("deadlineRound/expiresRound 是失效轮次，必须在该轮开始前完成；maxRounds 是停止轮次。\n")
                 .append("是否救援取决于利益、人格、关系、医疗包、安全区和敌人风险；不要机械救援，也不要机械背叛。\n")
                 .append("只返回合法 JSON，不要 Markdown 或解释。\n")
                 .append("格式: {\"action\":\"SEARCH\",\"targetPlayerId\":null,\"targetRegion\":null,\"socialAction\":")
@@ -124,6 +129,10 @@ public class BattleAgentContextBuilder {
         for (BattleSocialDecisionCandidate candidate : rotatedForDisplay(socialCandidateSet.candidates(),
                 socialCandidateSet.round() * 3 + socialCandidateSet.actorPlayerId().intValue())) {
             appendSocialCandidate(prompt, candidate);
+            prompt.append("compatibleTacticalIds: ").append(candidateSet.candidates().stream()
+                    .filter(t -> com.zn.agentarena.modules.battle.decision.BattleSocialCandidateCompatibility
+                            .allows(candidate, context, t.toAction()))
+                    .map(BattleDecisionCandidate::candidateId).toList()).append("\n");
         }
         prompt.append("\n【DECISION CHECKLIST】\n")
                 .append("1. 先避免本回合或下次缩圈前被毒圈、饥渴、低生命或敌人淘汰。\n")
@@ -135,6 +144,7 @@ public class BattleAgentContextBuilder {
                 .append("如果你确实不采取主动行动，也必须选择列表中 action: SKIP 对应的真实候选 ID。\n")
                 .append("不要返回 action、targetPlayerId 或 targetRegion；不要虚构候选 ID，也不要用 reasonSummary 改写候选含义。\n")
                 .append("socialCandidateId 也必须逐字复制一个真实 S 编号；选择 NO_SOCIAL_ACTION 对应的 S 编号表示不执行社会动作。不要直接返回 socialAction。\n")
+                .append("所选 tacticalCandidateId 必须在社会选项的 compatibleTacticalIds 中；随机搜索收益不计入资源预算，目标状态仍会在执行时复验。\n")
                 .append("communication 可为 null，或严格使用 {\"channel\":\"PUBLIC|LOCAL|PRIVATE\",\"targetPlayerId\":null,\"content\":\"...\"}；PRIVATE 必须指定其他未淘汰玩家，PUBLIC/LOCAL 的 targetPlayerId 必须为 null。\n")
                 .append("带有配套消息的 SHARE_RUMOR 社会候选会占用并覆盖 communication。\n")
                 .append("只返回合法 JSON，不要 Markdown 或解释。\n")

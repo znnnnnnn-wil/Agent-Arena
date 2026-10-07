@@ -16,12 +16,6 @@ import java.util.*;
  */
 public class BattleRoyaleGameEngine implements GameEngine<BattleRoyaleGameState, BattleRoyaleAction> {
     private static final int BLEED_OUT_AFTER_ROUNDS = 2;
-    private static final Map<String, Set<String>> REGION_CONNECTIONS = Map.of(
-            "A", Set.of("B", "C"),
-            "B", Set.of("A", "D"),
-            "C", Set.of("A", "D", "E"),
-            "D", Set.of("B", "C", "E"),
-            "E", Set.of("C", "D"));
 
     @Override
     /** 校验大逃杀行动是否符合当前游戏状态。 */
@@ -70,9 +64,8 @@ public class BattleRoyaleGameEngine implements GameEngine<BattleRoyaleGameState,
             return ActionValidation.fail(ResultCodeEnum.ACTION_TARGET_INVALID, "当前区域没有可占领的空投");
         }
         if (action.type() == BattleActionType.CAPTURE
-                && Objects.equals(state.getSupplyDropClaimPlayerId(), actor.getPlayerId())
-                && state.getSupplyDropClaimActionsRemaining() > 0) {
-            return ActionValidation.fail(ResultCodeEnum.ACTION_NOT_ALLOWED, "你已经在占领该空投，重复 CAPTURE 会重置进度");
+                && state.getSupplyDropClaimPlayerId() != null) {
+            return ActionValidation.fail(ResultCodeEnum.ACTION_NOT_ALLOWED, "空投已有占领者；必须先使其离开或倒地才能重新占领");
         }
         return ActionValidation.success();
     }
@@ -80,6 +73,17 @@ public class BattleRoyaleGameEngine implements GameEngine<BattleRoyaleGameState,
     @Override
     /** 执行一项大逃杀行动并生成状态变更事件。 */
     public EngineResult<BattleRoyaleGameState> execute(BattleRoyaleGameState state, BattleRoyaleAction action) {
+        return execute(state, action, false);
+    }
+
+    /** AI 决策还包含通信和社会动作；由调用方在整次决策结束后结算胜负。 */
+    public EngineResult<BattleRoyaleGameState> executeDeferredFinish(BattleRoyaleGameState state,
+                                                                       BattleRoyaleAction action) {
+        return execute(state, action, true);
+    }
+
+    private EngineResult<BattleRoyaleGameState> execute(BattleRoyaleGameState state, BattleRoyaleAction action,
+                                                         boolean deferFinish) {
         ActionValidation validation = validate(state, action);
         if (!validation.valid()) {
             throw CustomException.create(validation.resultCode(), validation.message());
@@ -98,7 +102,9 @@ public class BattleRoyaleGameEngine implements GameEngine<BattleRoyaleGameState,
         String lootName = null;
         int lootAmount = 0;
         int damageDealt = 0;
+        int creditedDamage = 0;
         boolean criticalHit = false;
+        actor.setGuarded(false);
         switch (action.type()) {
             case MOVE -> actor.setRegion(action.targetRegion());
             case SEARCH -> {
@@ -117,7 +123,7 @@ public class BattleRoyaleGameEngine implements GameEngine<BattleRoyaleGameState,
             case REST -> {
                 if (actor.getFood() > 0 && actor.getWater() > 0) {
                     actor.setHealth(Math.min(BattleRoyaleRules.MAX_HEALTH,
-                            actor.getHealth() + BattleRoyaleRules.REST_HEAL));
+                            actor.getHealth() + BattleRoyaleRules.REST_HEAL + BattleRegionRules.profile(actor.getRegion()).restBonus()));
                 }
             }
             case HIDE -> actor.setHidden(true);
@@ -126,8 +132,9 @@ public class BattleRoyaleGameEngine implements GameEngine<BattleRoyaleGameState,
                 actor.setHealth(Math.min(BattleRoyaleRules.MAX_HEALTH,
                         actor.getHealth() + BattleRoyaleRules.HEAL_AMOUNT));
             }
-            case GUARD -> actor.setArmor(Math.min(BattleRoyaleRules.GUARD_ARMOR_CAP,
-                    actor.getArmor() + BattleRoyaleRules.GUARD_ARMOR_GAIN));
+            case GUARD -> {
+                actor.setGuarded(true);
+            }
             case TRADE -> { /* 旧动作仅保留协议兼容；真实交换由 BattleTradeSystem 原子执行。 */ }
             case ATTACK -> {
                 BattlePlayerState target = state.findPlayer(action.targetPlayerId());
@@ -143,14 +150,20 @@ public class BattleRoyaleGameEngine implements GameEngine<BattleRoyaleGameState,
                 Random combatRandom = new Random(state.getRandomSeed() + actionRandomNo * 31 + target.getPlayerId());
                 criticalHit = combatRandom.nextInt(100) < BattleRoyaleRules.CRITICAL_CHANCE;
                 if (criticalHit) rawDamage += rawDamage / 2;
+                rawDamage = Math.max(1, rawDamage - BattleRegionRules.profile(target.getRegion()).coverReduction()
+                        - (target.isGuarded() ? BattleRoyaleRules.GUARD_DAMAGE_REDUCTION : 0));
+                target.setGuarded(false);
                 int absorbed = Math.min(target.getArmor(), rawDamage / 2);
                 target.setArmor(target.getArmor() - absorbed);
                 damageDealt = rawDamage - absorbed;
+                int effectiveDamage = Math.min(Math.max(0, target.getHealth()), damageDealt);
+                creditedDamage = Math.min(effectiveDamage,
+                        Math.max(0, BattleRoyaleRules.MAX_HEALTH - target.getScoredDamageReceived()));
+                target.setScoredDamageReceived(target.getScoredDamageReceived() + creditedDamage);
                 target.setHealth(target.getHealth() - damageDealt);
-                actor.setTotalDamage(actor.getTotalDamage() + damageDealt);
+                actor.setTotalDamage(actor.getTotalDamage() + creditedDamage);
                 target.setHidden(false);
                 target.setLastAttackerPlayerId(actor.getPlayerId());
-                actor.setExposed(false);
                 state.setCombatOccurredThisRound(true);
                 state.setRoundsWithoutCombat(0);
                 if (target.getHealth() <= 0) {
@@ -170,6 +183,9 @@ public class BattleRoyaleGameEngine implements GameEngine<BattleRoyaleGameState,
             case SKIP -> { }
         }
         if (actorWasActive) {
+            actor.setExposed(action.type() == BattleActionType.ATTACK || action.type() == BattleActionType.CAPTURE
+                    || action.type() == BattleActionType.EXECUTE
+                    || (action.type() == BattleActionType.SEARCH && BattleRegionRules.profile(actor.getRegion()).searchExposes()));
             actor.setHidden(action.type() == BattleActionType.HIDE);
             actor.setFood(Math.max(0, actor.getFood() - BattleRoyaleRules.METABOLISM_COST));
             actor.setWater(Math.max(0, actor.getWater() - BattleRoyaleRules.METABOLISM_COST));
@@ -183,6 +199,14 @@ public class BattleRoyaleGameEngine implements GameEngine<BattleRoyaleGameState,
         if (action.type().name().equals(actor.getLastAction())) actor.setRepeatedActions(actor.getRepeatedActions() + 1);
         else actor.setRepeatedActions(1);
         actor.setLastAction(action.type().name());
+        if (actor.isActive() && action.type() == BattleActionType.HIDE
+                && actor.getRepeatedActions() > BattleRoyaleRules.MAX_CONSECUTIVE_HIDES) {
+            actor.setHidden(false);
+            actor.setExposed(true);
+            addEvent(state, events, "BATTLE_PLAYER_EXPOSED", actor.getPlayerId(),
+                    Map.of("playerId", actor.getPlayerId(), "region", actor.getRegion(),
+                            "reason", "REPEATED_HIDING", "bonusDamage", 8));
+        }
         Map<String, Object> actionPayload = new LinkedHashMap<>();
         actionPayload.put("action", action.type().name());
         actionPayload.put("playerId", action.actorPlayerId());
@@ -196,6 +220,9 @@ public class BattleRoyaleGameEngine implements GameEngine<BattleRoyaleGameState,
         actionPayload.put("weaponLevel", actor.getWeaponLevel());
         actionPayload.put("ammo", actor.getAmmo());
         actionPayload.put("armor", actor.getArmor());
+        actionPayload.put("guarded", actor.isGuarded());
+        actionPayload.put("exposed", actor.isExposed());
+        actionPayload.put("terrainCover", BattleRegionRules.profile(actor.getRegion()).coverReduction());
         actionPayload.put("medkits", actor.getMedkits());
         actionPayload.put("kills", actor.getKills());
         actionPayload.put("lifeStatus", actor.effectiveLifeStatus().name());
@@ -206,6 +233,10 @@ public class BattleRoyaleGameEngine implements GameEngine<BattleRoyaleGameState,
             actionPayload.put("supplyDrop", false);
         }
         if (damageDealt > 0) actionPayload.put("damage", damageDealt);
+        if (action.type() == BattleActionType.ATTACK) {
+            actionPayload.put("creditedDamage", creditedDamage);
+            actionPayload.put("damageScoreGain", creditedDamage * BattleRoyaleRules.DAMAGE_SCORE_MULTIPLIER);
+        }
         if (criticalHit) actionPayload.put("critical", true);
         if (actionTarget != null) {
             actionPayload.put("targetHealth", actionTarget.getHealth());
@@ -249,14 +280,28 @@ public class BattleRoyaleGameEngine implements GameEngine<BattleRoyaleGameState,
         }
         state.setActionsInRound(state.getActionsInRound() + 1);
         skipEliminatedTurnSlots(state);
-        if (state.getActionsInRound() >= Math.max(1, state.getRoundTurnOrder().size())) {
+        if (!deferFinish) completeRoundIfNeeded(state, events);
+        if (!deferFinish) finishIfNeeded(state, events);
+        return new EngineResult<>(state, events);
+    }
+
+    /** 完整决策结算后才推进轮次、流血、缩圈和环境伤害。 */
+    public void completeRoundIfNeeded(BattleRoyaleGameState state, List<EngineEvent> events) {
+        if (state.getRoundTurnOrder().isEmpty()) return;
+        if (state.getActionsInRound() >= state.getRoundTurnOrder().size()) {
             state.setActionsInRound(0);
             state.setRoundTurnOrder(new ArrayList<>());
             state.setRoundNo(state.getRoundNo() + 1);
             processBleedOut(state, events);
             updateCombatPressure(state, events);
             updateRingAndApplyZoneDamage(state, events);
+            cancelInvalidSupplyClaim(state, events);
         }
+    }
+
+    /** 在所有影响积分的效果结算后调用；普通引擎入口仍会自动调用。 */
+    public void finishIfNeeded(BattleRoyaleGameState state, List<EngineEvent> events) {
+        if (state.getWinnerPlayerId() != null) return;
         if (state.contendingPlayers().size() <= 1 || state.alivePlayers().isEmpty()
                 || state.getRoundNo() >= state.getMaxRounds()) {
             BattlePlayerState winner = state.contendingPlayers().stream()
@@ -270,9 +315,11 @@ public class BattleRoyaleGameEngine implements GameEngine<BattleRoyaleGameState,
             finishPayload.put("winnerName", winner == null ? "无人幸存" : winner.getDisplayName());
             finishPayload.put("score", winner == null ? 0 : BattleRoyaleRules.survivalScore(winner));
             finishPayload.put("kills", winner == null ? 0 : winner.getKills());
+            finishPayload.put("scoreBreakdown", winner == null ? Map.of() : BattleRoyaleRules.scoreBreakdown(winner));
+            finishPayload.put("reason", state.contendingPlayers().size() <= 1 ? "LAST_SURVIVOR"
+                    : state.alivePlayers().isEmpty() ? "ALL_DOWNED_SCORE" : "MAX_ROUNDS_SCORE");
             addEvent(state, events, "BATTLE_FINISHED", null, finishPayload);
         }
-        return new EngineResult<>(state, events);
     }
 
     @Override
@@ -362,7 +409,7 @@ public class BattleRoyaleGameEngine implements GameEngine<BattleRoyaleGameState,
 
     private SearchOutcome addArmor(BattlePlayerState player, int amount) {
         int before = player.getArmor();
-        player.setArmor(Math.min(BattleRoyaleRules.LOOT_ARMOR_CAP, player.getArmor() + amount));
+        player.setArmor(BattleRoyaleRules.addArmor(player.getArmor(), amount, BattleRoyaleRules.LOOT_ARMOR_CAP));
         return new SearchOutcome("ARMOR", "护甲", player.getArmor() - before);
     }
 
@@ -377,13 +424,13 @@ public class BattleRoyaleGameEngine implements GameEngine<BattleRoyaleGameState,
 
     /** 返回某区域直接相连、可在一次行动内到达的区域。 */
     public Set<String> adjacentRegions(String region) {
-        return REGION_CONNECTIONS.getOrDefault(region, Set.of());
+        return new LinkedHashSet<>(BattleRegionRules.TOPOLOGY.getOrDefault(region, List.of()));
     }
 
     private void cancelInvalidSupplyClaim(BattleRoyaleGameState state, List<EngineEvent> events) {
         if (state.getSupplyDropClaimPlayerId() == null) return;
         BattlePlayerState claimant = state.findPlayer(state.getSupplyDropClaimPlayerId());
-        if (claimant != null && claimant.isActive()
+        if (claimant != null && claimant.isActive() && !claimant.isHidden()
                 && Objects.equals(claimant.getRegion(), state.getSupplyDropRegion())) return;
         Long claimantId = state.getSupplyDropClaimPlayerId();
         state.setSupplyDropClaimPlayerId(null);
@@ -400,7 +447,7 @@ public class BattleRoyaleGameEngine implements GameEngine<BattleRoyaleGameState,
         }
         equipWeapon(claimant, Math.min(3, Math.max(2, claimant.getWeaponLevel() + 1)));
         claimant.setAmmo(claimant.getAmmo() + 6);
-        claimant.setArmor(Math.min(60, claimant.getArmor() + 20));
+        claimant.setArmor(BattleRoyaleRules.addArmor(claimant.getArmor(), 20, BattleRoyaleRules.LOOT_ARMOR_CAP));
         claimant.setMedkits(claimant.getMedkits() + 1);
         addEvent(state, events, "BATTLE_SUPPLY_CAPTURED", claimant.getPlayerId(),
                 Map.of("playerId", claimant.getPlayerId(), "region", claimant.getRegion(),
@@ -445,7 +492,7 @@ public class BattleRoyaleGameEngine implements GameEngine<BattleRoyaleGameState,
     }
 
     private void updateRingAndApplyZoneDamage(BattleRoyaleGameState state, List<EngineEvent> events) {
-        int stage = BattleRoyaleRules.ringStageForRound(state.getRoundNo());
+        int stage = BattleRoyaleRules.ringStageForRound(state.getRoundNo(), state.getMaxRounds());
         ensureRingOrder(state);
         List<String> ringOrder = state.getRingOrder();
         int safeCount = 6 - stage;
@@ -457,11 +504,14 @@ public class BattleRoyaleGameEngine implements GameEngine<BattleRoyaleGameState,
             Map<String, Object> zonePayload = new LinkedHashMap<>();
             zonePayload.put("ringStage", stage);
             zonePayload.put("safeRegions", safeRegions);
-            zonePayload.put("nextShrinkRound", stage < 5 ? stage * 3 + 1 : null);
+            int nextShrink = BattleRoyaleRules.nextShrinkRound(stage, state.getMaxRounds());
+            zonePayload.put("nextShrinkRound", nextShrink < 0 ? null : nextShrink);
             addEvent(state, events, "BATTLE_ZONE_UPDATED", null, zonePayload);
         }
         if (state.getRoundNo() % 4 == 0 && state.getLastSupplyDropRound() != state.getRoundNo()) {
-            int dropIndex = Math.floorMod((int) (state.getRandomSeed() + state.getRoundNo()), safeRegions.size());
+            // 提前排除下次出圈区域，让争夺装备与进圈路线相容。
+            int durableCount = Math.max(1, safeRegions.size() - 1);
+            int dropIndex = Math.floorMod((int) (state.getRandomSeed() + state.getRoundNo()), durableCount);
             String dropRegion = safeRegions.get(dropIndex);
             state.setSupplyDropRegion(dropRegion);
             state.setSupplyDropClaimPlayerId(null);

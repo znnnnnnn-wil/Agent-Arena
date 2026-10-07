@@ -18,6 +18,7 @@ import com.zn.agentarena.modules.battle.decision.BattleDecisionCandidateGenerato
 import com.zn.agentarena.modules.battle.decision.BattleDecisionCandidateResolver;
 import com.zn.agentarena.modules.battle.decision.BattleDecisionCandidateSet;
 import com.zn.agentarena.modules.battle.decision.BattleHeuristicCandidateSelector;
+import com.zn.agentarena.modules.battle.decision.BattleHeuristicSocialCandidateSelector;
 import com.zn.agentarena.modules.battle.decision.BattleSocialCandidateResolution;
 import com.zn.agentarena.modules.battle.decision.BattleSocialDecisionCandidateGenerator;
 import com.zn.agentarena.modules.battle.decision.BattleSocialDecisionCandidateResolver;
@@ -95,6 +96,7 @@ public class BattleAiGameRunner {
     private final BattleSocialDecisionCandidateGenerator socialCandidateGenerator;
     private final BattleSocialDecisionCandidateResolver socialCandidateResolver;
     private final BattleRoyaleGameEngine gameEngine = new BattleRoyaleGameEngine();
+    private final BattleHeuristicSocialCandidateSelector localSocialSelector = new BattleHeuristicSocialCandidateSelector();
 
     @Autowired
     public BattleAiGameRunner(ModelGateway modelGateway,
@@ -195,42 +197,22 @@ public class BattleAiGameRunner {
             BattleRoyaleAction action = selected == null
                     ? new BattleRoyaleAction(actor.getPlayerId(), BattleActionType.SKIP, null, null)
                     : selected.toAction();
+            var social = localSocialSelector.select(socialCandidateSet, context, action);
             if (modelRateLimited) {
                 ModelFailureInfo failure = ModelFailureInfo.rateLimited();
-                return executeWithDecision(state, actor, action, null, null, failure.summary(), 0,
+                return executeWithDecision(state, actor, action, social.decision(), localCommunication(social), failure.summary(), 0,
                         "MODEL_FALLBACK", failure.code());
             }
-            return executeWithDecision(state, actor, action, null, null,
+            return executeWithDecision(state, actor, action, social.decision(), localCommunication(social),
                     "本地策略仅根据当前观察、自身状态和主观关系作出行动。", 60, "LOCAL", null);
         }
+        BattleCandidateDecision decision;
         try {
-            BattleCandidateDecision decision = modelGateway.generateStructured(config,
+            decision = modelGateway.generateStructured(config,
                     contextBuilder.build(context, candidateSet, socialCandidateSet), BattleCandidateDecision.class);
             if (decision == null) {
                 throw CustomException.create(ResultCodeEnum.MODEL_RESPONSE_INVALID, "模型未返回候选选择");
             }
-            BattleCandidateResolution resolution = candidateResolver.resolve(candidateSet,
-                    decision.tacticalCandidateId(), state, actor);
-            BattleSocialCandidateResolution socialResolution = socialCandidateResolver.resolve(socialCandidateSet,
-                    decision.socialCandidateId(), state, actor);
-            BattleSocialDecision resolvedSocial = socialResolution.selected() ? socialResolution.decision() : null;
-            BattleCommunicationDecision resolvedCommunication = socialResolution.coupledCommunication() == null
-                    ? decision.communication() : socialResolution.coupledCommunication();
-            if (!resolution.selected()) {
-                BattleDecisionCandidate selected = heuristicCandidateSelector.select(candidateSet, context);
-                BattleRoyaleAction action = selected == null
-                        ? new BattleRoyaleAction(actor.getPlayerId(), BattleActionType.SKIP, null, null)
-                        : selected.toAction();
-                log.warn("大逃杀模型候选无效，改用有限信息本地策略: gameId={}, playerId={}, resolution={}",
-                        state.getGameId(), actor.getPlayerId(), resolution.code());
-                return executeWithDecision(state, actor, action, resolvedSocial, resolvedCommunication,
-                        "模型未返回有效候选，本回合已使用本地策略继续对局。", 0,
-                        "MODEL_FALLBACK", resolution.code().name(), decision.tacticalCandidateId(),
-                        resolution.code().name());
-            }
-            return executeWithDecision(state, actor, resolution.action(), resolvedSocial, resolvedCommunication,
-                    decision.reasonSummary(), decision.confidence(), "MODEL", null,
-                    decision.tacticalCandidateId(), resolution.code().name());
         } catch (RuntimeException exception) {
             ModelFailureInfo failure = ModelFailureInfo.from(exception);
             log.warn("大逃杀模型决策失败，改用有限信息本地策略: gameId={}, playerId={}, code={}, reason={}",
@@ -239,9 +221,56 @@ public class BattleAiGameRunner {
             BattleRoyaleAction action = selected == null
                     ? new BattleRoyaleAction(actor.getPlayerId(), BattleActionType.SKIP, null, null)
                     : selected.toAction();
-            return executeWithDecision(state, actor, action, null, null, failure.summary(), 0,
+            var social = localSocialSelector.select(socialCandidateSet, context, action);
+            return executeWithDecision(state, actor, action, social.decision(), localCommunication(social), failure.summary(), 0,
                     "MODEL_FALLBACK", failure.code());
         }
+        BattleCandidateResolution resolution = candidateResolver.resolve(candidateSet,
+                decision.tacticalCandidateId(), state, actor);
+        BattleRoyaleAction action = resolution.action();
+        if (!resolution.selected()) {
+            var selected = heuristicCandidateSelector.select(candidateSet, context);
+            action = selected == null ? new BattleRoyaleAction(actor.getPlayerId(), BattleActionType.SKIP, null, null)
+                    : selected.toAction();
+        }
+        BattleSocialCandidateResolution socialResolution = socialCandidateResolver.resolve(socialCandidateSet,
+                decision.socialCandidateId(), state, actor);
+        BattleSocialDecision resolvedSocial = socialResolution.selected() ? socialResolution.decision() : null;
+        String socialCode = socialResolution.code();
+        if (resolvedSocial != null) {
+            var selectedSocial = socialCandidateSet.candidates().stream()
+                    .filter(c -> Objects.equals(c.decision(), socialResolution.decision())).findFirst().orElseThrow();
+            if (!com.zn.agentarena.modules.battle.decision.BattleSocialCandidateCompatibility
+                    .allows(selectedSocial, context, action)) {
+                resolvedSocial = null;
+                socialCode = "INCOMPATIBLE_TACTICAL_SOCIAL_PAIR";
+            }
+        }
+        if (!"SELECTED".equals(socialCode)) {
+            memorySystem.rememberFact(state, actor.getPlayerId(), BattleMemoryType.SOCIAL_ACTION_REJECTED,
+                    actor.getPlayerId(), null, "社会候选未执行：" + socialCode
+                            + "；请检查当前 S 编号及 compatibleTacticalIds", 100, actor.getRegion());
+        }
+        BattleCommunicationDecision resolvedCommunication = resolvedSocial != null
+                && socialResolution.coupledCommunication() != null
+                ? socialResolution.coupledCommunication() : decision.communication();
+        var result = executeWithDecision(state, actor, action, resolvedSocial, resolvedCommunication,
+                resolution.selected() ? decision.reasonSummary() : "模型候选无效，本回合使用本地战术策略。",
+                resolution.selected() ? decision.confidence() : Integer.valueOf(0),
+                resolution.selected() ? "MODEL" : "MODEL_FALLBACK",
+                resolution.selected() ? null : resolution.code().name(),
+                decision.tacticalCandidateId(), resolution.code().name());
+        result.events().get(0).payload().put("selectedSocialCandidateId", decision.socialCandidateId());
+        result.events().get(0).payload().put("socialCandidateResolution", socialCode);
+        return result;
+    }
+
+    private BattleCommunicationDecision localCommunication(
+            com.zn.agentarena.modules.battle.decision.BattleSocialDecisionCandidate candidate) {
+        if (candidate.coupledCommunication() != null) return candidate.coupledCommunication();
+        if (candidate.decision() == null || candidate.decision().targetPlayerId() == null) return null;
+        return new BattleCommunicationDecision("PRIVATE", candidate.decision().targetPlayerId(),
+                "我选择了：" + candidate.effectSummary());
     }
 
     /** 构建可用于测试和诊断的有限上下文；不会返回真实 GameState。 */
@@ -390,15 +419,35 @@ public class BattleAiGameRunner {
         }
 
         String selectedCandidateId = parsed == null ? null : parsed.tacticalCandidateId();
+        BattleRoyaleAction diagnosticAction = resolution.action();
+        if (!resolution.selected()) {
+            var fallback = heuristicCandidateSelector.select(candidateSet, context);
+            diagnosticAction = fallback == null ? new BattleRoyaleAction(actor.getPlayerId(), BattleActionType.SKIP, null, null)
+                    : fallback.toAction();
+            source = "MODEL_FALLBACK";
+        }
         BattleSocialCandidateResolution socialResolution = socialCandidateResolver.resolve(socialCandidateSet,
                 parsed == null ? null : parsed.socialCandidateId(), state, actor);
         BattleSocialDecision diagnosticSocial = socialResolution.selected() ? socialResolution.decision() : null;
         BattleCommunicationDecision diagnosticCommunication = socialResolution.coupledCommunication() == null
                 ? parsed == null ? null : parsed.communication() : socialResolution.coupledCommunication();
-        EngineResult<BattleRoyaleGameState> result = executeWithDecision(state, actor, resolution.action(),
+        if (parsed == null) {
+            var localSocial = localSocialSelector.select(socialCandidateSet, context, diagnosticAction);
+            diagnosticSocial = localSocial.decision();
+            diagnosticCommunication = localCommunication(localSocial);
+        } else if (diagnosticSocial != null) {
+            var socialCandidate = socialCandidateSet.candidates().stream()
+                    .filter(c -> Objects.equals(c.decision(), socialResolution.decision())).findFirst().orElseThrow();
+            if (!com.zn.agentarena.modules.battle.decision.BattleSocialCandidateCompatibility
+                    .allows(socialCandidate, context, diagnosticAction)) {
+                diagnosticSocial = null;
+                diagnosticCommunication = parsed.communication();
+            }
+        }
+        EngineResult<BattleRoyaleGameState> result = executeWithDecision(state, actor, diagnosticAction,
                 diagnosticSocial, diagnosticCommunication,
                 parsed == null ? resolution.validationReason() : parsed.reasonSummary(),
-                parsed == null ? 0 : parsed.confidence(), source,
+                parsed == null ? Integer.valueOf(0) : parsed.confidence(), source,
                 "MODEL_FALLBACK".equals(source) ? fallbackCode : null,
                 selectedCandidateId, resolution.code().name());
 
@@ -412,7 +461,7 @@ public class BattleAiGameRunner {
         contextSummary.put("candidates", candidateSet.candidates());
         contextSummary.put("selectedCandidateId", selectedCandidateId);
         contextSummary.put("candidateResolution", resolution.code().name());
-        contextSummary.put("resolvedAction", resolution.action().type().name());
+        contextSummary.put("resolvedAction", diagnosticAction.type().name());
         contextSummary.put("legalityResult", resolution.validationReason());
         contextSummary.putAll(metadata);
         String parsedAction = selected == null ? null : selected.actionType().name();
@@ -426,10 +475,10 @@ public class BattleAiGameRunner {
                 selected == null ? null : selected.targetPlayerId(), selected == null ? null : selected.targetRegion(),
                 social, diagnosticCommunication == null ? null : diagnosticCommunication.channel(),
                 parsed == null ? resolution.validationReason() : parsed.reasonSummary(),
-                parsed == null ? 0 : parsed.confidence(), resolution.action().type().name(),
-                resolution.action().targetPlayerId(), resolution.action().targetRegion(), changed,
+                parsed == null ? Integer.valueOf(0) : parsed.confidence(), diagnosticAction.type().name(),
+                diagnosticAction.targetPlayerId(), diagnosticAction.targetRegion(), changed,
                 changed ? resolution.code().name() : null, resolution.valid(), resolution.validationReason(),
-                resolution.action().type().name(), resolution.action().targetPlayerId(), social, eventTypes,
+                diagnosticAction.type().name(), diagnosticAction.targetPlayerId(), social, eventTypes,
                 source, fallbackCode);
     }
 
@@ -468,7 +517,8 @@ public class BattleAiGameRunner {
         }
         ObservedBattlePlayer bestTarget = bestVisibleTarget(context, actor);
         if (type == BattleActionType.SEARCH
-                && Objects.equals(observation.publicWorld().supplyDropRegion(), self.region())) {
+                && Objects.equals(observation.publicWorld().supplyDropRegion(), self.region())
+                && observation.publicWorld().supplyDropClaimPlayerId() == null) {
             type = BattleActionType.CAPTURE;
         }
         if (bestTarget != null && self.health() >= 35
@@ -492,6 +542,8 @@ public class BattleAiGameRunner {
                 type = BattleActionType.SEARCH;
             }
         }
+        if (type == BattleActionType.CAPTURE
+                && observation.publicWorld().supplyDropClaimPlayerId() != null) type = BattleActionType.SEARCH;
         if (type == BattleActionType.CAPTURE
                 && !Objects.equals(observation.publicWorld().supplyDropRegion(), self.region())) {
             if (observation.publicWorld().supplyDropRegion() == null) {
@@ -529,7 +581,8 @@ public class BattleAiGameRunner {
                 : self.health() < 30 ? BattleActionType.REST
                 : !observation.publicWorld().safeRegions().contains(self.region()) ? BattleActionType.MOVE
                 : target != null && attackValue(context, actor, target) >= aggressionThreshold(actor) ? BattleActionType.ATTACK
-                : Objects.equals(observation.publicWorld().supplyDropRegion(), self.region()) ? BattleActionType.CAPTURE
+                : Objects.equals(observation.publicWorld().supplyDropRegion(), self.region())
+                        && observation.publicWorld().supplyDropClaimPlayerId() == null ? BattleActionType.CAPTURE
                 : self.armor() < 20 && self.armed() ? BattleActionType.GUARD : BattleActionType.SEARCH;
         String targetRegion = null;
         if (type == BattleActionType.MOVE) {
@@ -687,7 +740,8 @@ public class BattleAiGameRunner {
                                                                      String source,
                                                                      String fallbackCode,
                                                                      String selectedCandidateId,
-                                                                     String candidateResolution) {
+                                                                      String candidateResolution) {
+        int decisionRound = state.getRoundNo();
         state.setSequenceNo(state.getSequenceNo() + 1);
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("action", action.type().name());
@@ -720,7 +774,7 @@ public class BattleAiGameRunner {
             publicPayload.put("source", source);
             if (fallbackCode != null) publicPayload.put("fallbackCode", fallbackCode);
         }
-        EngineResult<BattleRoyaleGameState> result = gameEngine.execute(state, action);
+        EngineResult<BattleRoyaleGameState> result = gameEngine.executeDeferredFinish(state, action);
         ArrayList<EngineEvent> events = new ArrayList<>();
         events.add(new EngineEvent("AI_DECISION", actor.getPlayerId(), payload, publicPayload));
         events.addAll(result.events());
@@ -770,6 +824,10 @@ public class BattleAiGameRunner {
                     actor.getPlayerId(), socialDecision.targetPlayerId(),
                     "社会动作 " + socialDecision.type() + " 未执行；可能因移动后的距离、资源、期限或引用失效",
                     100, actor.getRegion());
+            state.setSequenceNo(state.getSequenceNo() + 1);
+            events.add(new EngineEvent("BATTLE_SOCIAL_ACTION_REJECTED", actor.getPlayerId(),
+                    Map.of("socialAction", socialDecision.type(), "reason", "EXECUTION_PRECONDITION_CHANGED"),
+                    Map.of("summary", "一项社会动作未满足执行条件")));
         }
         events.addAll(socialResult.events());
         appendRelationshipEvents(state, events, socialResult.relationshipChanges());
@@ -782,9 +840,24 @@ public class BattleAiGameRunner {
                 .filter(Number.class::isInstance).map(Number.class::cast).map(Number::longValue).distinct()
                 .forEach(sellerId -> events.addAll(hiddenGoalSystem.evaluate(
                         state, sellerId, "INFORMATION_TRADE_COMPLETED")));
+        int roundEventStart = events.size();
+        List<EngineEvent> roundEvents = new ArrayList<>();
+        gameEngine.completeRoundIfNeeded(state, roundEvents);
+        events.addAll(roundEvents);
+        memorySystem.rememberPublicEvents(state, roundEvents);
         BattleSocialActionResult roundResult = socialActionSystem.evaluateRoundState(state);
         events.addAll(roundResult.events());
         appendRelationshipEvents(state, events, roundResult.relationshipChanges());
+        gameEngine.finishIfNeeded(state, events);
+        for (int i = 0; i < events.size(); i++) {
+            EngineEvent event = events.get(i);
+            int eventRound = i < roundEventStart ? decisionRound : state.getRoundNo();
+            Map<String, Object> eventPayload = new LinkedHashMap<>(event.payload());
+            Map<String, Object> eventPublicPayload = new LinkedHashMap<>(event.publicPayload());
+            eventPayload.put("roundNo", eventRound);
+            eventPublicPayload.put("roundNo", eventRound);
+            events.set(i, new EngineEvent(event.type(), event.actorPlayerId(), eventPayload, eventPublicPayload));
+        }
         return new EngineResult<>(state, events);
     }
 

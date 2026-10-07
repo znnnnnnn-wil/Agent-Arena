@@ -45,14 +45,18 @@ public class GameEventStreamService {
             throw CustomException.create(ResultCodeEnum.TOO_MANY_REQUESTS, "实时观战连接数已满");
         }
         SseEmitter emitter = new SseEmitter(0L);
-        CopyOnWriteArrayList<SseEmitter> gameEmitters =
-                emitters.computeIfAbsent(gameId, ignored -> new CopyOnWriteArrayList<>());
-        synchronized (gameEmitters) {
-            if (gameEmitters.size() >= properties.stream().maxSubscribersPerGame()) {
-                totalSubscribers.decrementAndGet();
-                throw CustomException.create(ResultCodeEnum.TOO_MANY_REQUESTS, "该对局观战连接数已满");
-            }
-            gameEmitters.add(emitter);
+        try {
+            emitters.compute(gameId, (ignored, current) -> {
+                CopyOnWriteArrayList<SseEmitter> gameEmitters = current == null ? new CopyOnWriteArrayList<>() : current;
+                if (gameEmitters.size() >= properties.stream().maxSubscribersPerGame()) {
+                    throw CustomException.create(ResultCodeEnum.TOO_MANY_REQUESTS, "该对局观战连接数已满");
+                }
+                gameEmitters.add(emitter);
+                return gameEmitters;
+            });
+        } catch (RuntimeException exception) {
+            totalSubscribers.decrementAndGet();
+            throw exception;
         }
         emitter.onCompletion(() -> remove(gameId, emitter));
         emitter.onTimeout(() -> remove(gameId, emitter));
@@ -96,14 +100,11 @@ public class GameEventStreamService {
     }
 
     private void remove(Long gameId, SseEmitter emitter) {
-        CopyOnWriteArrayList<SseEmitter> gameEmitters = emitters.get(gameId);
-        if (gameEmitters != null) {
+        emitters.computeIfPresent(gameId, (ignored, gameEmitters) -> {
             if (gameEmitters.remove(emitter)) {
                 totalSubscribers.decrementAndGet();
             }
-            if (gameEmitters.isEmpty()) {
-                emitters.remove(gameId);
-            }
-        }
+            return gameEmitters.isEmpty() ? null : gameEmitters;
+        });
     }
 }
