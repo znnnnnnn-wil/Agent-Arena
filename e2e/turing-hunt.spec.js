@@ -1,5 +1,10 @@
 const { test, expect } = require('@playwright/test');
 const { installTuringMockApi } = require('./helpers/turing-mock-api');
+const { prepareVisualPage } = require('./helpers/visual-env');
+
+test.beforeEach(async ({ page }, testInfo) => {
+  if (testInfo.title.includes('@visual')) await prepareVisualPage(page);
+});
 
 async function seedOwnerSession(page) {
   await page.addInitScript(() => {
@@ -17,6 +22,7 @@ async function openOwnerWatch(page) {
   await page.goto('/');
   await page.evaluate(() => goTo('watch'));
   await expect(page.locator('.turing-watch-dashboard')).toBeVisible();
+  await page.evaluate(() => document.fonts.ready);
 }
 
 test('图灵潜伏局创建向导固定一名真人和五名 AI，并使用专属接口启动', async ({ page }) => {

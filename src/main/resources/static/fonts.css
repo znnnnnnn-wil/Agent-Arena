@@ -1,0 +1,8 @@
+/* Noto Sans SC, SIL Open Font License: assets/fonts/noto-sans-sc/OFL.txt. */
+@font-face {
+  font-family: 'Noto Sans SC';
+  src: url('/assets/fonts/noto-sans-sc/NotoSansSC.woff2') format('woff2');
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+}

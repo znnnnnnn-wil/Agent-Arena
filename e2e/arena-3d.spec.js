@@ -1,8 +1,15 @@
 const { test, expect } = require('@playwright/test');
 const { installMockApi, PLAYERS, EVENTS } = require('./helpers/mock-api');
 const { installTuringMockApi } = require('./helpers/turing-mock-api');
+const { prepareVisualPage } = require('./helpers/visual-env');
+
+test.beforeEach(async ({ page }, testInfo) => {
+  if (testInfo.title.includes('@visual')) await prepareVisualPage(page);
+});
 
 test('狼人杀模式持续复用并更新真实 WebGL 3D 舞台', async ({ page }) => {
+  // This journey creates two complete WebGL stages; allow both asset loads on software-rendered CI.
+  test.setTimeout(60_000);
   const runtimeErrors = [];
   page.on('pageerror', (error) => runtimeErrors.push(error.message));
   await page.emulateMedia({ reducedMotion: 'no-preference' });

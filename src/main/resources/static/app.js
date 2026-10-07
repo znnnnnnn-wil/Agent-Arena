@@ -730,6 +730,7 @@ async function fetchCurrentGame(incremental = false) {
     const activeSession = getGameSession();
     if (activeSession?.gameId !== session.gameId || activeSession?.publicView !== session.publicView
         || !document.getElementById('watch-page')?.classList.contains('active')) return game;
+    const previousState = JSON.stringify([lastRealGame, lastRealPlayers, currentRealEvents, currentMatchProjection]);
     currentRealEvents = incremental
       ? [...new Map([...currentRealEvents, ...events].map((event) => [Number(event.sequenceNo), event])).values()]
           .sort((left, right) => Number(left.sequenceNo) - Number(right.sequenceNo))
@@ -738,8 +739,10 @@ async function fetchCurrentGame(incremental = false) {
     lastRealGame = game;
     lastRealPlayers = players;
     currentMatchProjection = projection || { schemaVersion: 1, commentary: [], highlights: [] };
-    renderRealWatch(game, players, currentRealEvents, session.publicView === true);
-    if (session.clipId) setTimeout(() => document.querySelector(`[data-highlight-id="${CSS.escape(session.clipId)}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 80);
+    // Reconnects often return the same state. Preserve form input and the mounted stage in that case.
+    const stateChanged = previousState !== JSON.stringify([game, players, currentRealEvents, currentMatchProjection]);
+    if (!incremental || stateChanged) renderRealWatch(game, players, currentRealEvents, session.publicView === true);
+    if (session.clipId && (!incremental || stateChanged)) setTimeout(() => document.querySelector(`[data-highlight-id="${CSS.escape(session.clipId)}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 80);
     connectLiveStream(game, session);
     return game;
   } catch (error) {

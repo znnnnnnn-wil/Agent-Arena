@@ -1,7 +1,9 @@
 const { test, expect } = require('@playwright/test');
 const { installMockApi } = require('./helpers/mock-api');
+const { prepareVisualPage } = require('./helpers/visual-env');
 
 test.beforeEach(async ({ page }, testInfo) => {
+  await prepareVisualPage(page);
   await installMockApi(page, { voteStage: testInfo.title.includes('投票关系') });
   await page.addInitScript(() => {
     localStorage.setItem('agentArenaUser', JSON.stringify({ userId: 1, nickname: '视觉测试用户', visitorToken: 'test-token' }));
@@ -10,6 +12,7 @@ test.beforeEach(async ({ page }, testInfo) => {
 
 async function openQuestionStage(page) {
   await page.goto('/#clip=42:g42-s41-question');
+  await page.evaluate(() => document.fonts.ready);
   await expect(page.locator('.real-watch-dashboard')).toBeVisible();
   await expect(page.locator('.werewolf-arena-v2')).toBeVisible();
   await expect(page.locator('[data-arena-3d="werewolf"]')).toHaveAttribute('data-arena3d-assets', '8', { timeout: 15000 });
@@ -53,6 +56,7 @@ test('@visual 狼人杀2.0投票关系视图快照', async ({ page }) => {
 
 test('@visual Agent 人格中心视觉快照', async ({ page }) => {
   await page.goto('/#models');
+  await page.evaluate(() => document.fonts.ready);
   await expect(page.locator('#agent-studio')).toBeVisible();
   await page.locator('.topbar').evaluate((element) => { element.style.visibility = 'hidden'; });
   await page.evaluate(() => window.scrollTo(0, 0));

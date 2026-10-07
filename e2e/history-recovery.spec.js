@@ -1,5 +1,6 @@
 const { test, expect } = require('@playwright/test');
 const { installMockApi, EVENTS } = require('./helpers/mock-api');
+const { installTuringMockApi } = require('./helpers/turing-mock-api');
 
 const success = (data) => ({ code: '00000', msg: '成功', data });
 
@@ -13,6 +14,29 @@ async function controlledStream(page) {
     };
   });
 }
+
+test('无状态变化的实时重连保留真人投票输入和表单节点', async ({ page }) => {
+  await installTuringMockApi(page);
+  await controlledStream(page);
+  await page.addInitScript(() => {
+    localStorage.setItem('agentArenaUser', JSON.stringify({ userId: 1, visitorToken: 'test-token' }));
+    localStorage.setItem('agentArenaSession', JSON.stringify({ gameId: 77, mode: 'TURING_HUNT' }));
+  });
+  await page.goto('/');
+  await page.evaluate(() => goTo('watch'));
+  const form = page.locator('[data-turing-human-form]');
+  await expect(form).toBeVisible();
+  await form.locator('[name="targetSeatNo"]').selectOption('5');
+  await form.locator('[name="reasonSummary"]').fill('回答过于抽象，回避了具体顺序');
+  await form.evaluate(element => { element.dataset.reconnectProbe = 'preserved'; });
+  await page.evaluate(async () => {
+    window.testStreams[0].onopen();
+    await watchLoadPromise;
+  });
+  await expect(form).toHaveAttribute('data-reconnect-probe', 'preserved');
+  await expect(form.locator('[name="targetSeatNo"]')).toHaveValue('5');
+  await expect(form.locator('[name="reasonSummary"]')).toHaveValue('回答过于抽象，回避了具体顺序');
+});
 
 test('长对局观战与复盘逐页读取完整事件', async ({ page }) => {
   await installMockApi(page);
