@@ -69,11 +69,18 @@ public class GameReadService {
      * @return 游戏列表
      */
     public List<GameResponse> listOwned(Long userId) {
+        return listOwned(userId, 0, 20);
+    }
+
+    public List<GameResponse> listOwned(Long userId, int requestedPage, int requestedSize) {
         ensureUserExists(userId);
+        int page = Math.max(0, requestedPage);
+        int size = Math.max(1, Math.min(100, requestedSize));
         return gameMapper.selectListByQuery(QueryWrapper.create()
                         .eq(Game::getOwnerUserId, userId)
                         .orderBy(Game::getUpdateTime, false)
-                        .limit(20))
+                        .orderBy(Game::getId, false)
+                        .limit(page * size, size))
                 .stream().map(game -> toResponse(game, true, false)).toList();
     }
 
@@ -303,7 +310,7 @@ public class GameReadService {
     }
 
     private GameSummaryResponse buildSummary(Game game) {
-        List<GameEvent> events = eventRecorder.listRecentEvents(game.getId(), 5_000);
+        List<GameEvent> events = eventRecorder.listAllEvents(game.getId());
         List<String> keyEvents = events.stream().filter(event -> KEY_EVENTS.contains(event.getEventType()))
                 .map(this::summarizeKeyEvent).toList();
         String winner = events.stream()
@@ -314,12 +321,9 @@ public class GameReadService {
                         event.getPublicPayload().getOrDefault("winnerName",
                                 event.getPublicPayload().get("winnerPlayerId")))))
                 .orElse(null);
-        int eliminations = (int) events.stream()
-                .filter(event -> Set.of("PLAYER_ELIMINATED", "BATTLE_PLAYER_ELIMINATED",
-                                "TURING_PLAYER_ELIMINATED")
-                        .contains(event.getEventType())).count();
         return GameSummaryResponse.builder().gameId(game.getId()).status(game.getStatus().name()).winner(winner)
-                .eventCount(events.size()).eliminationCount(eliminations).keyEvents(keyEvents).build();
+                .eventCount(eventRecorder.countEvents(game.getId()))
+                .eliminationCount(eventRecorder.countEliminations(game.getId())).keyEvents(keyEvents).build();
     }
 
     private String summarizeKeyEvent(GameEvent event) {
@@ -398,6 +402,12 @@ public class GameReadService {
         if (game.getMode() == GameMode.TURING_HUNT) {
             return toTuringResponse(game, ownerView, builder);
         }
+        BattleRoyaleGameState battleState = game.getMode() == GameMode.BATTLE_ROYALE
+                ? snapshotService.loadLatestBattleSnapshot(game.getId()) : null;
+        if (battleState != null) {
+            builder.battleWorld(com.zn.agentarena.modules.game.dto.response.BattleWorldResponse.from(battleState))
+                    .maxRounds(battleState.getMaxRounds());
+        }
         if (game.getStatus() != GameStatus.RUNNING) return builder.build();
         List<GamePlayer> players = getPlayers(game.getId());
         Long actorId = null;
@@ -412,10 +422,10 @@ public class GameReadService {
                 hideNightActor = !ownerView && state.getPhase().name().startsWith("NIGHT_");
             }
         } else if (game.getMode() == GameMode.BATTLE_ROYALE) {
-            BattleRoyaleGameState state = snapshotService.loadLatestBattleSnapshot(game.getId());
-            if (state != null && !state.turnPlayers().isEmpty()) {
-                List<BattlePlayerState> turnPlayers = state.turnPlayers();
-                actorId = turnPlayers.get(state.getActionsInRound() % turnPlayers.size()).getPlayerId();
+            BattlePlayerState next = battleState == null ? null
+                    : new com.zn.agentarena.modules.battle.engine.BattleRoyaleGameEngine().currentTurnPlayer(battleState);
+            if (next != null) {
+                actorId = next.getPlayerId();
                 actionType = "BATTLE_ACTION";
             }
         }

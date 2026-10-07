@@ -60,9 +60,9 @@ public final class BattleActionAffordanceEngine {
             case CAPTURE -> { condition = "当前区域存在可占领的空投"; relevant.put("currentRegion", actor.getRegion()); relevant.put("supplyDropRegion", state.getSupplyDropRegion()); }
             case REST -> { condition = "当前存活状态允许原地休整"; relevant.put("health", actor.getHealth()); relevant.put("food", actor.getFood()); relevant.put("water", actor.getWater()); }
             case ATTACK -> { condition = "同区域存在可观察且有效的 ALIVE 攻击目标"; relevant.put("currentRegion", actor.getRegion()); relevant.put("targetPlayerIds", targets); relevant.put("sameRegion", true); }
-            case HIDE -> { condition = "当前存活状态允许隐藏"; relevant.put("currentlyHidden", actor.isHidden()); }
+            case HIDE -> { condition = "存活玩家可选择隐藏；连续第3次及以后会被侦测并暴露"; relevant.put("currentlyHidden", actor.isHidden()); relevant.put("lastAction", actor.getLastAction() == null ? "NONE" : actor.getLastAction()); relevant.put("repeatedActions", actor.getRepeatedActions()); }
             case HEAL -> { condition = "医疗包数量大于零，满足生产 HEAL 校验条件"; relevant.put("health", actor.getHealth()); relevant.put("medkits", actor.getMedkits()); }
-            case GUARD -> { condition = "当前存活状态允许加固护甲"; relevant.put("armor", actor.getArmor()); }
+            case GUARD -> { condition = "存活玩家可临时防守，下次受击减伤8，不增加永久护甲"; relevant.put("armor", actor.getArmor()); }
             case REVIVE -> { condition = "同区域存在可观察的 DOWNED 玩家且医疗包数量大于零"; relevant.put("currentRegion", actor.getRegion()); relevant.put("targetPlayerIds", targets); relevant.put("targetState", "DOWNED"); relevant.put("sameRegion", true); relevant.put("medkits", actor.getMedkits()); }
             case EXECUTE -> { condition = "同区域存在可观察的 DOWNED 玩家"; relevant.put("currentRegion", actor.getRegion()); relevant.put("targetPlayerIds", targets); relevant.put("targetState", "DOWNED"); relevant.put("sameRegion", true); }
             case SKIP -> { condition = "当前规则允许跳过战术行动"; relevant.put("lifeStatus", actor.effectiveLifeStatus().name()); }

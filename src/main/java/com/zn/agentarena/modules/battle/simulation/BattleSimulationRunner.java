@@ -157,7 +157,7 @@ public class BattleSimulationRunner {
             return action(actor, BattleActionType.ATTACK, enemies.get(random.nextInt(enemies.size())).playerId(), null);
         }
         if (Objects.equals(context.observation().publicWorld().supplyDropRegion(), self.region())
-                && !Objects.equals(context.observation().publicWorld().supplyDropClaimPlayerId(), actor.getPlayerId())
+                && context.observation().publicWorld().supplyDropClaimPlayerId() == null
                 && random.nextInt(100) < 45) {
             return action(actor, BattleActionType.CAPTURE, null, null);
         }

@@ -664,12 +664,53 @@ function connectLiveStream(game, session) {
   liveStreamGameId = game.id;
   liveStreamStatus = '实时事件连接中';
   liveEventSource = new EventSource(`/api/public/games/${game.id}/stream`);
-  liveEventSource.onopen = () => { liveStreamStatus = '实时事件已连接'; updateLiveStreamIndicator(); };
+  liveEventSource.onopen = () => {
+    liveStreamStatus = '实时事件已连接';
+    updateLiveStreamIndicator();
+    // A reconnect can miss the final event, so always reconcile persisted state.
+    loadCurrentGame(true);
+  };
   liveEventSource.addEventListener('game-event', () => loadCurrentGame(true));
   liveEventSource.onerror = () => { liveStreamStatus = '实时事件重连中'; updateLiveStreamIndicator(); };
 }
 
-async function loadCurrentGame(incremental = false) {
+async function loadAllReplayEvents(base, gameId, afterSequence = 0) {
+  const events = [];
+  let cursor = afterSequence;
+  while (true) {
+    const page = await apiRequest(`${base}/${gameId}/replay?afterSequence=${cursor}&limit=500`);
+    if (!Array.isArray(page) || !page.length) return events;
+    const nextCursor = Number(page[page.length - 1].sequenceNo);
+    if (!Number.isSafeInteger(nextCursor) || nextCursor <= cursor) throw new Error('回放事件序号异常');
+    events.push(...page);
+    if (page.length < 500) return events;
+    cursor = nextCursor;
+  }
+}
+
+let watchLoadPromise = null;
+let watchRefreshPending = false;
+let watchFullRefreshPending = false;
+
+function loadCurrentGame(incremental = false) {
+  watchRefreshPending = true;
+  watchFullRefreshPending ||= !incremental;
+  if (!watchLoadPromise) {
+    watchLoadPromise = (async () => {
+      let result;
+      while (watchRefreshPending) {
+        const full = watchFullRefreshPending;
+        watchRefreshPending = false;
+        watchFullRefreshPending = false;
+        result = await fetchCurrentGame(!full);
+      }
+      return result;
+    })().finally(() => { watchLoadPromise = null; });
+  }
+  return watchLoadPromise;
+}
+
+async function fetchCurrentGame(incremental = false) {
   const session = getGameSession();
   if (!session) {
     showToast('请先创建一场对局');
@@ -683,9 +724,13 @@ async function loadCurrentGame(incremental = false) {
     const [game, players, events, projection] = await Promise.all([
       apiRequest(`${base}/${session.gameId}`),
       apiRequest(`${base}/${session.gameId}/players`),
-      apiRequest(`${base}/${session.gameId}/replay?afterSequence=${afterSequence}&limit=500`),
+      loadAllReplayEvents(base, session.gameId, afterSequence),
       apiRequest(`${base}/${session.gameId}/projection`).catch(() => null)
     ]);
+    const activeSession = getGameSession();
+    if (activeSession?.gameId !== session.gameId || activeSession?.publicView !== session.publicView
+        || !document.getElementById('watch-page')?.classList.contains('active')) return game;
+    const previousState = JSON.stringify([lastRealGame, lastRealPlayers, currentRealEvents, currentMatchProjection]);
     currentRealEvents = incremental
       ? [...new Map([...currentRealEvents, ...events].map((event) => [Number(event.sequenceNo), event])).values()]
           .sort((left, right) => Number(left.sequenceNo) - Number(right.sequenceNo))
@@ -694,8 +739,10 @@ async function loadCurrentGame(incremental = false) {
     lastRealGame = game;
     lastRealPlayers = players;
     currentMatchProjection = projection || { schemaVersion: 1, commentary: [], highlights: [] };
-    renderRealWatch(game, players, currentRealEvents, session.publicView === true);
-    if (session.clipId) setTimeout(() => document.querySelector(`[data-highlight-id="${CSS.escape(session.clipId)}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 80);
+    // Reconnects often return the same state. Preserve form input and the mounted stage in that case.
+    const stateChanged = previousState !== JSON.stringify([game, players, currentRealEvents, currentMatchProjection]);
+    if (!incremental || stateChanged) renderRealWatch(game, players, currentRealEvents, session.publicView === true);
+    if (session.clipId && (!incremental || stateChanged)) setTimeout(() => document.querySelector(`[data-highlight-id="${CSS.escape(session.clipId)}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 80);
     connectLiveStream(game, session);
     return game;
   } catch (error) {
@@ -719,7 +766,7 @@ async function loadReplayPage() {
     const [game, players, events, summary, projection] = await Promise.all([
       apiRequest(`${base}/${session.gameId}`),
       apiRequest(`${base}/${session.gameId}/players`),
-      apiRequest(`${base}/${session.gameId}/replay?limit=500`),
+      loadAllReplayEvents(base, session.gameId),
       apiRequest(`${base}/${session.gameId}/summary`),
       apiRequest(`${base}/${session.gameId}/projection`).catch(() => null)
     ]);
@@ -834,7 +881,7 @@ function describeGameEvent(group, players) {
     BATTLE_ZONE_DAMAGE: ['☣', '受到毒圈伤害', `${actorName} 在 ${event.payload?.region || '圈外'} 受到 ${event.payload?.damage || 0} 点伤害，剩余生命 ${event.payload?.health ?? '-'}。`],
     BATTLE_SUPPLY_DROP: ['▣', '空投已抵达', `高级物资空投落在 ${event.payload?.region || '-'} 区，抵达后需要占领并守住。`],
     BATTLE_SUPPLY_CONTESTED: ['⚑', '开始占领空投', `${actorName} 正在 ${event.payload?.region || '-'} 区占领空投，还需守住 ${event.payload?.actionsRemaining || 0} 次行动。`],
-    BATTLE_SUPPLY_CLAIM_BROKEN: ['◇', '空投占领中断', '占领者被淘汰或离开区域，空投重新变为无主状态。'],
+    BATTLE_SUPPLY_CLAIM_BROKEN: ['◇', '空投占领中断', '占领者倒地、离开或隐藏，空投重新变为无主状态。'],
     BATTLE_SUPPLY_CAPTURED: ['▣', '空投占领成功', `${actorName} 守住空投并获得了高级武器、弹药、护甲和医疗包。`],
     BATTLE_PUBLIC_MESSAGE: ['💬', '公开消息', `${actorName}：${event.payload?.content || '发布了一条公开消息。'}`],
     BATTLE_LOCAL_MESSAGE: ['💬', '本地消息', `${actorName} 在 ${event.payload?.region || '当前'} 区发出消息：${event.payload?.content || ''}`],
@@ -854,6 +901,7 @@ function describeGameEvent(group, players) {
     BATTLE_TRADE_PROPOSED: ['⇄', '交易提议', `${actorName} 发起了一项资源交易协商。`],
     BATTLE_TRADE_COMPLETED: ['⇄', '交易完成', '双方资源校验通过，交易已原子完成。'],
     BATTLE_TRADE_FAILED: ['!', '交易失败', '接受时资源或位置条件已变化，双方资源均未交换。'],
+    BATTLE_SOCIAL_ACTION_REJECTED: ['!', '互动未完成', '局势变化使本次互动无法完成。'],
     BATTLE_HIDDEN_GOAL_COMPLETED: ['◆', '私人目标完成', `${actorName} 完成了一项目标并获得奖励，具体内容仍为私密信息。`],
     BATTLE_OBJECTIVE_CONTRIBUTED: ['⌁', '协作信标获得贡献', `${actorName} 为公共协作目标提交了物资。`],
     BATTLE_OBJECTIVE_COMPLETED: ['✦', '协作目标完成', '参与者共同完成信标建设并获得护甲奖励。'],
@@ -1262,7 +1310,7 @@ function battleLootLabel(type, amount, name) {
 function battleActionResult(payload, target) {
   if (payload.action === 'ATTACK' && target) return `攻击了 ${target.displayName}，造成 ${payload.damage ?? 0} 点伤害${payload.critical ? '（暴击）' : ''}，对方生命降至 ${payload.targetHealth ?? '-'}。`;
   if (payload.action === 'SEARCH') return payload.lootType === 'EMPTY' ? '物资点已经枯竭，或搜索被同区敌人干扰。' : `搜索成功：获得${battleLootLabel(payload.lootType, payload.lootAmount, payload.lootName)}。`;
-  if (payload.action === 'CAPTURE') return '开始占领当前区域的空投，离开或被淘汰都会中断占领。';
+  if (payload.action === 'CAPTURE') return '开始占领无人把守的空投，倒地、离开或隐藏都会中断占领。';
   if (payload.action === 'MOVE') return `已移动至 ${payload.region || '新区域'}。`;
   if (payload.action === 'HEAL') return `消耗医疗包恢复生命，当前生命 ${payload.health ?? '-'}。`;
   if (payload.action === 'GUARD') return `完成防御准备，当前护甲 ${payload.armor ?? 0}。`;
@@ -1299,13 +1347,13 @@ function renderBattleMap(players, game, eventGroups) {
     D: ['南部工事', '◇', '护甲 / 弹药'],
     E: ['西侧营地', '△', '医疗 / 补给']
   };
-  const ringStage = Math.min(5, 1 + Math.floor(Math.max(0, (game.currentRound || 1) - 1) / 3));
-  const ringOrder = ['A', 'B', 'C', 'E', 'D'];
-  const safeRegions = ringOrder.slice(0, 6 - ringStage);
-  const nextRemovedRegion = ringStage < 5 ? safeRegions[safeRegions.length - 1] : null;
-  const supplyEvent = [...eventGroups].reverse().map((group) => group.primary || group.decision)
-    .find((event) => ['BATTLE_SUPPLY_DROP', 'BATTLE_SUPPLY_CONTESTED', 'BATTLE_SUPPLY_CAPTURED'].includes(event?.eventType));
-  const supplyDropRegion = supplyEvent?.eventType === 'BATTLE_SUPPLY_CAPTURED' ? null : supplyEvent?.payload?.region || null;
+  const world = window.BattleWorld.resolve(game, eventGroups.flatMap(group => [group.primary, group.decision].filter(Boolean)));
+  const { ringStage, safeRegions } = world;
+  Object.entries(world.regionProfiles).forEach(([region, profile]) => {
+    if (regionMeta[region]) regionMeta[region] = [profile.name, regionMeta[region][1], profile.resources];
+  });
+  const nextRemovedRegion = world.ringOrder.length && ringStage < 5 ? world.ringOrder[world.ringOrder.length - ringStage] : null;
+  const supplyDropRegion = world.supplyDropRegion;
   const latestGroup = latestCompletedGroup(eventGroups);
   const latestEvent = latestGroup?.primary || null;
   const latestInfo = latestEvent ? describeGameEvent(latestGroup, players) : ['◌', '等待首个行动', '推进对局后，移动、交战、搜索与毒圈变化会直接显示在地图上。'];
@@ -1380,12 +1428,12 @@ function renderBattleMap(players, game, eventGroups) {
     <div class="map-grid-lines"></div>
     <div class="battle-storm-vignette"></div>
     <svg class="battle-action-layer" viewBox="0 0 1000 720" preserveAspectRatio="none" aria-hidden="true"><defs><marker id="battle-trace-arrow" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 Z" /></marker></defs>${actionTrace}</svg>
-    <div class="map-ring-status"><span>安全区监测 · ${ringStage}/5</span><b>${aliveCount} 人存活</b><div class="ring-meter">${Array.from({ length: 5 }, (_, index) => `<i class="${index < ringStage ? 'active' : ''}"></i>`).join('')}</div><small>${ringStage < 5 ? `第 ${ringStage * 3 + 1} 轮再次缩圈` : '最终安全区'} · ${armedCount} 人持械</small></div>
+    <div class="map-ring-status"><span>${world.known ? `安全区监测 · ${ringStage}/5` : '安全区 · 等待服务端状态'}</span><b>${aliveCount} 人存活</b><div class="ring-meter">${Array.from({ length: 5 }, (_, index) => `<i class="${index < ringStage ? 'active' : ''}"></i>`).join('')}</div><small>${world.nextShrinkRound ? `第 ${world.nextShrinkRound} 轮再次缩圈` : world.known && ringStage === 5 ? '最终安全区' : '缩圈预告待同步'} · ${armedCount} 人持械</small><small>安全区域：${world.known ? escapeHtml(safeRegions.join('、')) : '待同步'}</small></div>
     <div class="battle-live-feed action-${String(action || 'waiting').toLowerCase()}" aria-live="polite"><i>${escapeHtml(actionGlyph)}</i><div><small>第 ${Number(latestEvent?.roundNo || game.currentRound || 1)} 轮 · #${Number(latestEvent?.sequenceNo || 0)}</small><b>${escapeHtml(actionTitle)}</b><p>${escapeHtml(actionDetail)}</p></div></div>
     ${zones}
     ${hiddenPlayers.length ? `<section class="map-zone hidden-zone"><header><i>?</i><div><b>隐蔽区域</b><small>${hiddenPlayers.length} 名玩家位置已隐藏</small></div></header><div class="zone-players">${hiddenPlayers.map((player) => `<button type="button" class="map-player alive hidden ${samePlayerId(player.id, selectedArenaPlayerId) ? 'is-selected' : ''}" data-arena-player="${Number(player.id)}"><span class="map-player-token"><i>${Number(player.seatNo)}</i></span><span class="map-player-copy"><b>${escapeHtml(player.displayName)}</b><small>位置保密</small></span></button>`).join('')}</div></section>` : ''}
     <div class="map-legend"><span><i class="alive-dot"></i>存活</span><span><i class="safe-dot"></i>安全区</span><span><i class="closing-dot"></i>即将缩圈</span><span><i class="supply-dot"></i>空投</span><span>点击玩家可聚焦</span></div>
-  </div>`;
+  </div><details class="battle-rules-panel"><summary>行动取舍与胜负规则</summary><p>${escapeHtml(game.battleWorld?.victoryRule || '最后未淘汰者获胜；限时或全员倒地时按生存积分结算。')}</p><p>每次存活玩家的战术行动消耗食物和饮水各1；任一归零受到5伤害。防守仅减免下一次受击8点伤害，不增加永久护甲，下次行动失效。攻击、占领、处决和非林地搜索会暴露自己，承受额外8点原始伤害，安静行动后解除。连续第3次及以后隐藏会被侦测并暴露位置，换用其他战术动作后重置。</p><div>${Object.entries(world.regionProfiles).map(([region, profile]) => `<span>${region} · ${escapeHtml(profile.name)}：${profile.coverReduction ? `掩护减伤${profile.coverReduction}` : profile.restBonus ? `休整额外恢复${profile.restBonus}` : escapeHtml(profile.resources)}</span>`).join('')}</div><p>移动路线：${Object.entries(world.topology).map(([region, neighbors]) => `${escapeHtml(region)}→${escapeHtml(neighbors.join(" / "))}`).join("；")}。</p><p>生存积分：生命×2 + 护甲 + 食物×2 + 饮水×2 + 医疗包×12 + 武器等级×18 + 弹药 + 击杀×120 + 计分有效伤害×2。每个目标累计最多贡献100计分伤害，过量伤害不计分，治疗与救援不重置。</p></details>`;
 }
 
 let autoPlayEnabled = false;
@@ -1535,7 +1583,7 @@ const KEY_EVENT_TYPES = new Set([
   'BATTLE_PUBLIC_MESSAGE', 'BATTLE_LOCAL_MESSAGE', 'BATTLE_PRIVATE_MESSAGE', 'BATTLE_RELATIONSHIP_CHANGED',
   'BATTLE_ALLIANCE_PROPOSED', 'BATTLE_ALLIANCE_FORMED', 'BATTLE_ALLIANCE_REJECTED', 'BATTLE_ALLIANCE_LEFT', 'BATTLE_ALLIANCE_BETRAYED',
   'BATTLE_PROMISE_PROPOSED', 'BATTLE_PROMISE_ACCEPTED', 'BATTLE_PROMISE_FULFILLED', 'BATTLE_PROMISE_BROKEN',
-  'BATTLE_TRADE_PROPOSED', 'BATTLE_TRADE_COMPLETED', 'BATTLE_TRADE_FAILED',
+  'BATTLE_TRADE_PROPOSED', 'BATTLE_TRADE_COMPLETED', 'BATTLE_TRADE_FAILED', 'BATTLE_SOCIAL_ACTION_REJECTED',
   'BATTLE_HIDDEN_GOAL_COMPLETED', 'BATTLE_OBJECTIVE_CONTRIBUTED', 'BATTLE_OBJECTIVE_COMPLETED', 'BATTLE_OBJECTIVE_EXPIRED',
   'BATTLE_RUMOR_SHARED', 'BATTLE_INFORMATION_TRADE_PROPOSED', 'BATTLE_INFORMATION_TRADE_COMPLETED', 'BATTLE_INFORMATION_TRADE_FAILED',
   'BATTLE_PLAYER_DOWNED', 'BATTLE_PLAYER_REVIVED', 'BATTLE_PLAYER_EXECUTED',
@@ -1694,6 +1742,10 @@ function finishedPresentation(game, groups, players) {
   const winner = finish?.payload?.winnerName || findArenaPlayer(players, winnerId)?.displayName || finish?.payload?.winner || '胜负已结算';
   const eliminations = groups.filter((group) => ['PLAYER_ELIMINATED', 'BATTLE_PLAYER_ELIMINATED'].includes((group.primary || group.decision)?.eventType)).length;
   const battleStats = game.mode === 'BATTLE_ROYALE' && finish ? `<span>冠军淘汰 <b>${Number(finish.payload?.kills || 0)}</b></span><span>生存评分 <b>${Number(finish.payload?.score || 0)}</b></span>` : '';
+  const battleReason = { LAST_SURVIVOR: '成为最后未淘汰者', MAX_ROUNDS_SCORE: '达到回合上限，按生存积分获胜', ALL_DOWNED_SCORE: '全员倒地，按生存积分结算' }[finish?.payload?.reason] || '成为最终幸存者';
+  const scoreNames = { health: '生命', armor: '护甲', supplies: '补给', equipment: '装备', kills: '击杀', damage: '伤害' };
+  const scoreDetails = game.mode === 'BATTLE_ROYALE' && finish?.payload?.scoreBreakdown
+    ? `<p class="battle-score-details">${Object.entries(finish.payload.scoreBreakdown).map(([key, points]) => `${escapeHtml(scoreNames[key] || key)} ${Number(points)}分`).join(' · ')}</p>` : '';
   const audience = werewolfAudienceState(game.id);
   const actualWolves = players.filter((player) => player.roleCode === 'WEREWOLF').map((player) => Number(player.seatNo)).sort((a, b) => a - b);
   const predictedWolves = [...audience.suspectedWolfSeats].sort((a, b) => a - b);
@@ -1705,7 +1757,7 @@ function finishedPresentation(game, groups, players) {
     ? Number(playerBySeatNo(players, audience.eliminationPredictionSeatNo)?.id) === Number(lastVoteOut.payload?.playerId) : null;
   const audienceResult = game.mode === 'WEREWOLF' && (wolfPrediction || audience.eliminationPredictionSeatNo)
     ? `<div class="audience-result"><b>${escapeHtml(wolfPrediction || '未提交狼人预测')}</b><span>${audience.eliminationPredictionSeatNo ? `${eliminationCorrect ? '本轮放逐预测正确' : '本轮放逐预测未命中'} · 你选择了${Number(audience.eliminationPredictionSeatNo)}号` : '未提交本轮放逐预测'}</span></div>` : '';
-  return `<div class="match-finish-overlay"><span>最终结算</span><h2>${escapeHtml(winner)}</h2><p>${game.mode === 'BATTLE_ROYALE' ? '成为最终幸存者' : '赢得本场阵营对局'}</p><div class="finish-stats"><span>结束轮次 <b>${Number(game.currentRound || 0)}</b></span><span>淘汰事件 <b>${eliminations}</b></span>${battleStats}</div>${audienceResult}<footer><button class="primary" type="button" data-open-replay>查看完整复盘</button><button class="secondary" type="button" data-finish-home>返回竞技大厅</button></footer></div>`;
+  return `<div class="match-finish-overlay"><span>最终结算</span><h2>${escapeHtml(winner)}</h2><p>${game.mode === 'BATTLE_ROYALE' ? battleReason : '赢得本场阵营对局'}</p><div class="finish-stats"><span>结束轮次 <b>${Number(game.currentRound || 0)}</b></span><span>淘汰事件 <b>${eliminations}</b></span>${battleStats}</div>${scoreDetails}${audienceResult}<footer><button class="primary" type="button" data-open-replay>查看完整复盘</button><button class="secondary" type="button" data-finish-home>返回竞技大厅</button></footer></div>`;
 }
 
 function playerBySeatNo(players, seatNo) {
@@ -2547,14 +2599,30 @@ function openLobbyGame(game) {
   goTo(game.status === 'FINISHED' ? 'replays' : 'watch');
 }
 
+let lobbyGames = [];
+let lobbyPage = 0;
+let lobbyHasMore = false;
+const LOBBY_PAGE_SIZE = 20;
+
 function renderLobbyGames(games) {
   const grid = document.getElementById('live-game-grid');
   const liveLabel = document.getElementById('lobby-live-count');
   const totalLabel = document.getElementById('lobby-game-count');
   const continueButton = document.getElementById('continue-latest-game');
+  let moreButton = document.getElementById('lobby-load-more');
+  if (grid && !moreButton) {
+    moreButton = document.createElement('button');
+    moreButton.id = 'lobby-load-more';
+    moreButton.type = 'button';
+    moreButton.className = 'secondary';
+    moreButton.textContent = '加载更多对局';
+    moreButton.addEventListener('click', loadMoreLobbyGames);
+    grid.after(moreButton);
+  }
+  if (moreButton) moreButton.hidden = !lobbyHasMore;
   const runningCount = games.filter((game) => game.status === 'RUNNING').length;
   if (liveLabel) liveLabel.textContent = runningCount ? `${runningCount} 场真实对局正在进行` : '当前没有运行中的对局';
-  if (totalLabel) totalLabel.textContent = `共 ${games.length} 场 · 最近更新优先`;
+  if (totalLabel) totalLabel.textContent = `${lobbyHasMore ? '已加载' : '共'} ${games.length} 场 · 最近更新优先`;
   if (!grid) return;
   if (!games.length) {
     grid.innerHTML = '<div class="lobby-empty"><span>⌁</span><h3>还没有真实对局</h3><p>创建狼人杀、大逃杀或图灵潜伏局，行动、公开事件和复盘都会自动记录。</p><button class="primary" type="button" data-create-first>创建第一场对局</button></div>';
@@ -2566,7 +2634,7 @@ function renderLobbyGames(games) {
     }
     return;
   }
-  grid.innerHTML = games.slice(0, 9).map((game, index) => {
+  grid.innerHTML = games.map((game, index) => {
     const battle = game.mode === 'BATTLE_ROYALE';
     const turing = game.mode === 'TURING_HUNT';
     const statusClass = String(game.status || '').toLowerCase();
@@ -2598,11 +2666,32 @@ async function loadLobbyGames() {
   const grid = document.getElementById('live-game-grid');
   try {
     const visitor = await ensureVisitorSession();
-    const games = await apiRequest('/api/games');
-    renderLobbyGames(games || []);
+    const games = await apiRequest(`/api/games?page=0&size=${LOBBY_PAGE_SIZE}`);
+    lobbyGames = games || [];
+    lobbyPage = 0;
+    lobbyHasMore = lobbyGames.length === LOBBY_PAGE_SIZE;
+    renderLobbyGames(lobbyGames);
   } catch (error) {
     if (grid) grid.innerHTML = `<div class="lobby-empty error"><span>!</span><h3>对局列表加载失败</h3><p>${escapeHtml(error.message)}</p><button class="secondary" type="button" data-retry-lobby>重新加载</button></div>`;
     grid?.querySelector('[data-retry-lobby]')?.addEventListener('click', loadLobbyGames);
+  }
+}
+
+async function loadMoreLobbyGames() {
+  const button = document.getElementById('lobby-load-more');
+  if (!lobbyHasMore || button?.disabled) return;
+  if (button) button.disabled = true;
+  try {
+    const nextPage = lobbyPage + 1;
+    const games = await apiRequest(`/api/games?page=${nextPage}&size=${LOBBY_PAGE_SIZE}`);
+    lobbyGames = [...new Map([...lobbyGames, ...(games || [])].map((game) => [game.id, game])).values()];
+    lobbyPage = nextPage;
+    lobbyHasMore = (games || []).length === LOBBY_PAGE_SIZE;
+    renderLobbyGames(lobbyGames);
+  } catch (error) {
+    showToast(`加载更多对局失败：${error.message}`);
+  } finally {
+    if (button) button.disabled = false;
   }
 }
 

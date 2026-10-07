@@ -82,18 +82,34 @@ public class GameEventRecorder {
     public List<GameEvent> listEvents(Long gameId, long afterSequence, int requestedLimit) {
         int limit = Math.max(1, Math.min(500, requestedLimit));
         QueryWrapper query = QueryWrapper.create().eq(GameEvent::getGameId, gameId);
-        if (afterSequence > 0) {
-            query.gt(GameEvent::getSequenceNo, afterSequence)
-                    .orderBy(GameEvent::getSequenceNo, true).limit(limit);
-            return gameEventMapper.selectListByQuery(query);
-        }
-        List<GameEvent> latest = gameEventMapper.selectListByQuery(query
-                .orderBy(GameEvent::getSequenceNo, false).limit(limit));
-        java.util.Collections.reverse(latest);
-        return latest;
+        if (afterSequence > 0) query.gt(GameEvent::getSequenceNo, afterSequence);
+        return gameEventMapper.selectListByQuery(query.orderBy(GameEvent::getSequenceNo, true).limit(limit));
     }
 
-    /** Bounded internal history used for summaries; API consumers must use the paged method above. */
+    /** Read the complete event log in bounded database pages for summaries and projections. */
+    public List<GameEvent> listAllEvents(Long gameId) {
+        List<GameEvent> all = new java.util.ArrayList<>();
+        long afterSequence = 0;
+        while (true) {
+            List<GameEvent> page = listEvents(gameId, afterSequence, 500);
+            if (page == null || page.isEmpty()) return all;
+            all.addAll(page);
+            if (page.size() < 500) return all;
+            afterSequence = page.get(page.size() - 1).getSequenceNo();
+        }
+    }
+
+    public long countEvents(Long gameId) {
+        return gameEventMapper.selectCountByQuery(QueryWrapper.create().eq(GameEvent::getGameId, gameId));
+    }
+
+    public long countEliminations(Long gameId) {
+        return gameEventMapper.selectCountByQuery(QueryWrapper.create().eq(GameEvent::getGameId, gameId)
+                .in(GameEvent::getEventType, List.of("PLAYER_ELIMINATED", "BATTLE_PLAYER_ELIMINATED",
+                        "TURING_PLAYER_ELIMINATED")));
+    }
+
+    /** Bounded internal history for views that explicitly show recent events. */
     public List<GameEvent> listRecentEvents(Long gameId, int requestedLimit) {
         int limit = Math.max(1, Math.min(5_000, requestedLimit));
         List<GameEvent> latest = gameEventMapper.selectListByQuery(QueryWrapper.create()

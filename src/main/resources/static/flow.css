@@ -2207,6 +2207,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .page,
   .current-turn-stage::after,
   .thinking-indicator.active > i,
   .watch-feedback > i,

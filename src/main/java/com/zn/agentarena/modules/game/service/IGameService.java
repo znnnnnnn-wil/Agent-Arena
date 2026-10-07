@@ -22,6 +22,8 @@ public interface IGameService {
 
     List<GameResponse> listGames(Long userId);
 
+    List<GameResponse> listGames(Long userId, int page, int size);
+
     /** 创建一局狼人杀游戏。 */
     GameResponse createWerewolfGame(Long userId, CreateWerewolfGameRequest request);
 

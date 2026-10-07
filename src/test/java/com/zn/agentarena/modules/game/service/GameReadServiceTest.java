@@ -64,6 +64,22 @@ class GameReadServiceTest {
     }
 
     @Test
+    void summaryUsesCompleteCountsInsteadOfTheRecentEventWindow() {
+        when(gameMapper.selectOneById(9L)).thenReturn(Game.builder().id(9L).ownerUserId(1L)
+                .mode(GameMode.WEREWOLF).status(GameStatus.FINISHED).build());
+        when(eventRecorder.listAllEvents(9L)).thenReturn(List.of(GameEvent.builder()
+                .eventType("GAME_FINISHED").publicPayload(Map.of("winner", "VILLAGER")).build()));
+        when(eventRecorder.countEvents(9L)).thenReturn(6_001L);
+        when(eventRecorder.countEliminations(9L)).thenReturn(7L);
+
+        var summary = readService.getOwnedSummary(1L, 9L);
+
+        assertEquals(6_001L, summary.getEventCount());
+        assertEquals(7L, summary.getEliminationCount());
+        assertEquals("VILLAGER", summary.getWinner());
+    }
+
+    @Test
     void publicWerewolfViewHidesRoleModelAndPrivateSkillsUntilFinished() {
         Game game = Game.builder().id(9L).ownerUserId(1L).publicGame(true)
                 .mode(GameMode.WEREWOLF).status(GameStatus.RUNNING).build();
@@ -159,7 +175,7 @@ class GameReadServiceTest {
     }
 
     @Test
-    void battleProjectionUsesNextAlivePlayerFromActionIndex() {
+    void battleProjectionUsesRotatedRoundOrder() {
         Game game = Game.builder().id(20L).ownerUserId(1L).publicGame(false)
                 .mode(GameMode.BATTLE_ROYALE).status(GameStatus.RUNNING).currentPhase("ROUND").build();
         GamePlayer first = GamePlayer.builder().id(21L).gameId(20L).seatNo(1).displayName("Alpha")
@@ -175,8 +191,9 @@ class GameReadServiceTest {
 
         var response = readService.getOwned(1L, 20L);
 
-        assertEquals(22L, response.getCurrentActorPlayerId());
-        assertEquals("Bravo", response.getCurrentActorName());
+        assertEquals(21L, response.getCurrentActorPlayerId());
+        assertEquals("Alpha", response.getCurrentActorName());
+        org.junit.jupiter.api.Assertions.assertNotNull(response.getBattleWorld());
         assertEquals("BATTLE_ACTION", response.getCurrentActionType());
     }
 

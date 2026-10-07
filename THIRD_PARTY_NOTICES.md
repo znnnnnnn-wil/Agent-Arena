@@ -20,6 +20,13 @@ Agent Arena 本身采用 [MIT License](LICENSE)。仓库中直接再分发的第
 - 许可证：CC0 1.0 Universal
 - 详细来源、归档哈希和本地许可证：`src/main/resources/static/assets/3d/quaternius/THIRD_PARTY_ASSETS.md`
 
+## Noto Sans SC
+
+- 来源：https://github.com/google/fonts/tree/main/ofl/notosanssc
+- 许可证：SIL Open Font License 1.1
+- 本地许可证：`src/main/resources/static/assets/fonts/noto-sans-sc/OFL.txt`
+- `NotoSansSC.woff2` 由原始可变字体无损转换为 WOFF2，随页面加载以保持不同系统上的中文字形与布局一致。
+
 ## Package dependencies
 
 Maven 与 npm 依赖在构建时由各自的软件源获取，不随本仓库源代码直接再分发。依赖版本分别记录在 `pom.xml` 和 `package-lock.json`，使用者应同时遵守这些依赖各自的许可证。

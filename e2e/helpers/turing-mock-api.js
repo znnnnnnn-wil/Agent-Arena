@@ -276,6 +276,8 @@ async function installTuringMockApi(page, options = {}) {
       else if (stage === 'qna') data = RUNNING_EVENTS.slice(0, 8);
       else if (stage === 'voteReveal') data = FINISHED_EVENTS.slice(0, 12);
       else data = RUNNING_EVENTS;
+      data = data.filter((event) => event.sequenceNo > Number(url.searchParams.get('afterSequence') || 0))
+        .slice(0, Number(url.searchParams.get('limit') || 500));
     } else if (/\/api\/(?:public\/)?games\/77\/summary$/.test(pathname)) {
       data = { gameId: 77, status: game.status, winner: game.winner, eventCount: (finished ? FINISHED_EVENTS : RUNNING_EVENTS).length, eliminationCount: finished ? 2 : 1, keyEvents: [] };
     } else if (/\/api\/(?:public\/)?games\/77\/projection$/.test(pathname)) {

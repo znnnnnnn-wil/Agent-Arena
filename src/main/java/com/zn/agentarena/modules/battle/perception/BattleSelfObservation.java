@@ -18,6 +18,7 @@ public record BattleSelfObservation(
         int medkits,
         boolean hidden,
         boolean exposed,
+        boolean guarded,
         int kills,
         String lastAction,
         int repeatedActions,

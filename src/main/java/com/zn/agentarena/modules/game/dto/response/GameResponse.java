@@ -91,4 +91,6 @@ public class GameResponse {
     private Boolean identitiesRevealed;
     /** 图灵潜伏复盘摘要 */
     private Map<String, Object> turingRecap;
+    /** 大逃杀公开环境与规则，其他模式为空。 */
+    private BattleWorldResponse battleWorld;
 }

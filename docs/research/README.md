@@ -4,6 +4,13 @@
 
 ## 阅读入口
 
+- [大逃杀激励优化与免费模型复测](battle-gameplay-incentive-retest.md)
+- [免费额度模型对比实测](free-model-comparison-report.md)
+
+- [qwen-plus 真实模型实测](qwen-plus-real-model-report.md)
+
+- [大逃杀真实模型行为测试](battle-real-model-behavior-report.md)
+- [大逃杀规则完善与验收记录](battle-rules-improvements-report.md)
 - [大逃杀仿真报告](simulation-report.md)
 - [行为诊断汇总](behavior-diagnostic-report.md)
 - [候选动作决策架构](candidate-decision-architecture-report.md)

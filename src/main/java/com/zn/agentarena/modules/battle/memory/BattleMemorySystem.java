@@ -62,6 +62,11 @@ public class BattleMemorySystem {
                     action.actorPlayerId(), action.targetPlayerId(), "玩家" + action.actorPlayerId() + "向我赠送了食物",
                     75, region, 100, false);
         }
+        rememberPublicEvents(state, engineEvents);
+    }
+
+    /** 轮末公开事件独立记忆，避免再次记录已经执行的攻击。 */
+    public void rememberPublicEvents(BattleRoyaleGameState state, List<EngineEvent> engineEvents) {
         for (EngineEvent event : engineEvents) {
             if ("BATTLE_PLAYER_ELIMINATED".equals(event.type())) {
                 Long eliminatedId = longNumber(event.payload().get("playerId"));

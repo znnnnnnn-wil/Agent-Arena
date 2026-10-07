@@ -51,16 +51,18 @@ public class BattleDecisionCandidateGenerator {
                     "消耗本次战术行动", null);
         }
         if (Objects.equals(observation.publicWorld().supplyDropRegion(), self.region())
-                && !Objects.equals(observation.publicWorld().supplyDropClaimPlayerId(), actor.getPlayerId())) {
+                && observation.publicWorld().supplyDropClaimPlayerId() == null) {
             add(drafts, actor, BattleActionType.CAPTURE, null, null, "CAPTURE_SUPPLY_DROP",
-                    "争夺公开空投并把守点窗口设为当前存活人数；当前占领者=P"
+                    "占领无人把守的空投并守住一个行动窗口，获得高级武器、6弹药、20护甲及1医疗包；隐藏、离开或倒地会中断占领；当前占领者=P"
                             + observation.publicWorld().supplyDropClaimPlayerId() + "，剩余行动="
                             + observation.publicWorld().supplyDropClaimActionsRemaining(),
                     "消耗本次战术行动", null);
         }
         if (self.health() < BattleRoyaleRules.MAX_HEALTH && self.food() > 1 && self.water() > 1) {
             add(drafts, actor, BattleActionType.REST, null, null, "REST_SELF",
-                    "原地休整并恢复6生命", "消耗本次战术行动", null);
+                    "原地休整并恢复" + (BattleRoyaleRules.REST_HEAL
+                            + com.zn.agentarena.modules.battle.domain.BattleRegionRules.profile(self.region()).restBonus())
+                            + "生命", "消耗本次战术行动", null);
         }
 
         observation.visiblePlayers().stream()
@@ -69,21 +71,22 @@ public class BattleDecisionCandidateGenerator {
                 .forEach(target -> add(drafts, actor, BattleActionType.ATTACK, target.playerId(), null,
                         "ATTACK_P" + target.playerId(), "尝试伤害可见玩家 P" + target.playerId()
                                 + "；基础原始伤害=" + (self.armed() && self.ammo() > 0
-                                ? 28 + self.weaponLevel() * 12 : 18) + "，暴击率12%，再结算目标护甲/隐藏/盟友掩护",
+                                ? 28 + self.weaponLevel() * 12 : 18) + "，暴击率12%，再结算目标护甲/隐藏/盟友掩护；有效扣血每点获得2限时积分，每个目标累计最多贡献100计分伤害，过量伤害及救援后超额伤害不计分",
                         self.armed() && self.ammo() > 0 ? "消耗弹药 x1" : "无弹药时使用基础攻击",
                         allianceConsequence(context, actor.getPlayerId(), target.playerId(), "攻击")));
 
         add(drafts, actor, BattleActionType.HIDE, null, null, "HIDE_SELF",
-                "隐藏自己，直到被行动或规则暴露", "消耗本次战术行动", null);
+                "隐藏自己到下次行动；连续第3次及以后隐藏会被侦测并暴露，无法隐藏"
+                        + ("HIDE".equals(self.lastAction()) && self.repeatedActions() >= BattleRoyaleRules.MAX_CONSECUTIVE_HIDES
+                            ? "；本次将触发侦测，公布当前位置并承受暴露加伤" : ""),
+                "消耗本次战术行动", null);
         if (self.medkits() > 0 && self.health() < BattleRoyaleRules.MAX_HEALTH) {
             add(drafts, actor, BattleActionType.HEAL, null, null, "HEAL_SELF",
                     "治疗自己（SELF），当前生命 " + self.health() + "/100，恢复最多 35 生命",
                     "MEDKIT x1", null);
         }
-        if (self.armor() < BattleRoyaleRules.GUARD_ARMOR_CAP) {
-            add(drafts, actor, BattleActionType.GUARD, null, null, "GUARD_SELF",
-                    "护甲+8，最高到36；当前护甲=" + self.armor(), "消耗本次战术行动", null);
-        }
+        add(drafts, actor, BattleActionType.GUARD, null, null, "GUARD_SELF",
+                "不增加永久护甲；下次受击减伤8，自己下次行动时失效；当前护甲=" + self.armor(), "消耗本次战术行动", null);
 
         observation.visiblePlayers().stream()
                 .filter(player -> player.lifeStatus() == BattlePlayerLifeStatus.DOWNED)
@@ -126,6 +129,10 @@ public class BattleDecisionCandidateGenerator {
         String completeCost = actor.isActive()
                 ? costSummary + "；行动结束固定消耗 FOOD x1 + WATER x1，任一归零再受5伤害"
                 : costSummary;
+        if (type == BattleActionType.ATTACK || type == BattleActionType.CAPTURE || type == BattleActionType.EXECUTE
+                || (type == BattleActionType.SEARCH && com.zn.agentarena.modules.battle.domain.BattleRegionRules.profile(actor.getRegion()).searchExposes())) {
+            completeCost += "；暴露自己，下一次安静行动前额外承受8点原始伤害";
+        }
         drafts.add(new Draft(new BattleRoyaleAction(actor.getPlayerId(), type, targetPlayerId, targetRegion),
                 semanticName, effectSummary, completeCost, knownConsequence));
     }

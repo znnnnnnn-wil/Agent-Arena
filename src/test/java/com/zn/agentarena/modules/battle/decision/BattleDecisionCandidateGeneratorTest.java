@@ -116,6 +116,21 @@ class BattleDecisionCandidateGeneratorTest {
         assertEquals(BattleActionType.SKIP, set.candidates().get(0).actionType());
     }
 
+    @Test
+    void localStrategyDoesNotFarmArmorWithoutNearbyThreat() {
+        Fixture fixture = fixture();
+        fixture.actor.setArmed(true);
+        fixture.actor.setAmmo(0);
+        fixture.target.setRegion("E");
+        var selected = new BattleHeuristicCandidateSelector().select(generate(fixture),
+                context(fixture.state, fixture.actor));
+        assertEquals(BattleActionType.SEARCH, selected.actionType());
+        fixture.target.setRegion("A");
+        selected = new BattleHeuristicCandidateSelector().select(generate(fixture),
+                context(fixture.state, fixture.actor));
+        assertEquals(BattleActionType.GUARD, selected.actionType());
+    }
+
     private BattleDecisionCandidateSet generate(Fixture fixture) {
         return generator.generate(fixture.state, fixture.actor, context(fixture.state, fixture.actor));
     }

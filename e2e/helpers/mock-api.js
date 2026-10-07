@@ -153,7 +153,10 @@ async function installMockApi(page, options = {}) {
     else if (/\/api\/(?:public\/)?games\/\d+\/players$/.test(pathname)) data = pathname.startsWith('/api/public/')
       ? PLAYERS.map(({ modelConfigId, agentProfileId, roleCode, antidoteAvailable, poisonAvailable, seerChecks, ...safe }) => safe)
       : PLAYERS;
-    else if (/\/api\/(?:public\/)?games\/\d+\/replay$/.test(pathname)) data = visibleEvents;
+    else if (/\/api\/(?:public\/)?games\/\d+\/replay$/.test(pathname)) {
+      data = visibleEvents.filter((event) => event.sequenceNo > Number(url.searchParams.get('afterSequence') || 0))
+        .slice(0, Number(url.searchParams.get('limit') || 500));
+    }
     else if (/\/api\/(?:public\/)?games\/\d+\/summary$/.test(pathname)) data = { gameId: activeGameId, status: game.status, winner: null, eventCount: visibleEvents.length, eliminationCount: 0, keyEvents: [] };
     else if (/\/api\/(?:public\/)?games\/\d+\/projection$/.test(pathname)) data = {
       ...PROJECTION,

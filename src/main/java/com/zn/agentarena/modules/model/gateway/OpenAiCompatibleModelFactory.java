@@ -26,6 +26,7 @@ public class OpenAiCompatibleModelFactory implements ModelFactory {
 
     private static final Duration DEFAULT_TIMEOUT = Duration.ofSeconds(60);
     private static final Map<com.zn.agentarena.modules.model.domain.ModelProvider, String> DEFAULT_BASE_URLS = Map.ofEntries(
+            Map.entry(com.zn.agentarena.modules.model.domain.ModelProvider.OPENAI, "https://api.openai.com/v1"),
             Map.entry(com.zn.agentarena.modules.model.domain.ModelProvider.DEEPSEEK, "https://api.deepseek.com"),
             Map.entry(com.zn.agentarena.modules.model.domain.ModelProvider.QWEN, "https://dashscope.aliyuncs.com/compatible-mode/v1"),
             Map.entry(com.zn.agentarena.modules.model.domain.ModelProvider.DOUBAO, "https://ark.cn-beijing.volces.com/api/v3"),
@@ -45,9 +46,14 @@ public class OpenAiCompatibleModelFactory implements ModelFactory {
     /** 根据运行时配置创建 OpenAI 兼容的聊天模型客户端。 */
     public ChatModel create(ModelRuntimeConfig config) {
         validateConfig(config);
+        String baseUrl = StringUtils.hasText(config.baseUrl())
+                ? config.baseUrl() : DEFAULT_BASE_URLS.get(config.provider());
+        boolean local = config.provider() == com.zn.agentarena.modules.model.domain.ModelProvider.OLLAMA;
+        if (!local) endpointPolicy.validate(config.provider(), baseUrl);
         OpenAiChatModel.OpenAiChatModelBuilder builder = OpenAiChatModel.builder()
-                .httpClientBuilder(JdkHttpClient.builder().httpClientBuilder(HttpClient.newBuilder()
-                        .followRedirects(HttpClient.Redirect.NEVER)))
+                .httpClientBuilder(local ? JdkHttpClient.builder().httpClientBuilder(HttpClient.newBuilder()
+                        .followRedirects(HttpClient.Redirect.NEVER))
+                        : new ValidatedModelHttpClientBuilder(endpointPolicy, baseUrl))
                 .modelName(config.modelName())
                 .apiKey(config.apiKey())
                 .timeout(config.timeout() == null ? DEFAULT_TIMEOUT : config.timeout())
@@ -55,11 +61,6 @@ public class OpenAiCompatibleModelFactory implements ModelFactory {
                 .logRequests(false)
                 .logResponses(false);
 
-        String baseUrl = StringUtils.hasText(config.baseUrl())
-                ? config.baseUrl() : DEFAULT_BASE_URLS.get(config.provider());
-        if (config.provider() != com.zn.agentarena.modules.model.domain.ModelProvider.OLLAMA) {
-            endpointPolicy.validate(config.provider(), baseUrl);
-        }
         if (StringUtils.hasText(baseUrl)) {
             builder.baseUrl(baseUrl);
         }

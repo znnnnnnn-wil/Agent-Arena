@@ -13,6 +13,8 @@ import com.zn.agentarena.modules.battle.trade.*;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 
@@ -23,14 +25,33 @@ public class BattleSocialDecisionCandidateGenerator {
 
     public BattleSocialDecisionCandidateSet generate(BattleRoyaleGameState state, BattlePlayerState actor,
                                                       BattleAgentContext context) {
-        List<Draft> drafts = new ArrayList<>();
+        List<Draft> pending = new ArrayList<>();
+        List<Draft> objectives = new ArrayList<>();
+        List<Draft> encounters = new ArrayList<>();
+        List<Draft> rumors = new ArrayList<>();
         Long actorId = actor.getPlayerId();
         if (!actor.isDowned()) {
-            addPendingResponses(drafts, state, actor, context);
-            addObjectiveContributions(drafts, actor, context);
-            addVisiblePlayerOptions(drafts, actor, context);
-            addRumorOption(drafts, context);
+            addPendingResponses(pending, state, actor, context);
+            addObjectiveContributions(objectives, actor, context);
+            addVisiblePlayerOptions(encounters, actor, context);
+            addRumorOption(rumors, context);
         }
+        if (!encounters.isEmpty()) {
+            Collections.rotate(encounters, Math.floorMod(state.getRoundNo() + actorId.intValue(), encounters.size()));
+        }
+        pending.sort(Comparator.comparingInt(d -> switch (d.decision().type()) {
+            case "FULFILL_PROMISE" -> 0;
+            case "ACCEPT_PROMISE", "ACCEPT_ALLIANCE", "ACCEPT_TRADE", "ACCEPT_INFORMATION_TRADE" -> 1;
+            default -> 2;
+        }));
+        List<Draft> drafts = new ArrayList<>();
+        appendUpTo(drafts, pending, 16);
+        appendUpTo(drafts, objectives, 4);
+        appendUpTo(drafts, encounters, 10);
+        appendUpTo(drafts, rumors, 1);
+        appendUpTo(drafts, pending, MAX_CANDIDATES - 1);
+        appendUpTo(drafts, objectives, MAX_CANDIDATES - 1);
+        appendUpTo(drafts, encounters, MAX_CANDIDATES - 1);
         Draft noAction = new Draft("NO_SOCIAL_ACTION", "本回合不执行正式社会动作", "无", null, null);
         List<BattleSocialDecisionCandidate> candidates = new ArrayList<>();
         int actionableCount = Math.min(MAX_CANDIDATES - 1, drafts.size());
@@ -43,6 +64,12 @@ public class BattleSocialDecisionCandidateGenerator {
                 noAction.name(), noAction.effect(), noAction.cost(), null, null));
         return new BattleSocialDecisionCandidateSet(state.getGameId(), state.getRoundNo(), state.getSequenceNo(),
                 actorId, List.copyOf(candidates));
+    }
+
+    private void appendUpTo(List<Draft> selected, List<Draft> source, int limit) {
+        while (!source.isEmpty() && selected.size() < MAX_CANDIDATES - 1 && limit-- > 0) {
+            selected.add(source.remove(0));
+        }
     }
 
     private void addPendingResponses(List<Draft> drafts, BattleRoyaleGameState state,
@@ -80,7 +107,8 @@ public class BattleSocialDecisionCandidateGenerator {
                     return promisee != null && promisee.isActive()
                             && Objects.equals(actor.getRegion(), promisee.getRegion())
                             && BattleResourceInventory.amount(actor, p.getResourceType())
-                            >= p.getAmount() + BattleRoyaleRules.METABOLISM_COST;
+                            >= p.getAmount() + (p.getResourceType() == BattleResourceType.FOOD
+                            || p.getResourceType() == BattleResourceType.WATER ? BattleRoyaleRules.METABOLISM_COST : 0);
                 })
                 .forEach(p -> add(drafts, "FULFILL_PROMISE_" + p.getPromiseId(),
                         "向同区 P" + p.getPromiseePlayerId() + " 履行 " + p.getResourceType() + " x" + p.getAmount()
@@ -102,9 +130,13 @@ public class BattleSocialDecisionCandidateGenerator {
                 .filter(t -> t.getStatus() == BattleInformationTradeStatus.PROPOSED
                         && Objects.equals(t.getBuyerPlayerId(), actorId))
                 .forEach(t -> {
-                    add(drafts, "ACCEPT_INFORMATION_TRADE_" + t.getTradeId(), "支付 " + t.getPrice()
-                            + " 购买一条私密传闻", String.valueOf(t.getPrice()),
-                            social("ACCEPT_INFORMATION_TRADE", t.getSellerPlayerId(), t.getTradeId(), null, null, null, null, null));
+                    boolean alreadyKnown = context.social().rumors().stream()
+                            .anyMatch(r -> Objects.equals(r.getRumorId(), t.getRumorId()));
+                    if (!alreadyKnown) {
+                        add(drafts, "ACCEPT_INFORMATION_TRADE_" + t.getTradeId(), "支付 " + t.getPrice()
+                                + " 购买一条私密传闻", String.valueOf(t.getPrice()),
+                                social("ACCEPT_INFORMATION_TRADE", t.getSellerPlayerId(), t.getTradeId(), null, null, null, null, null));
+                    }
                     add(drafts, "REJECT_INFORMATION_TRADE_" + t.getTradeId(), "拒绝该情报交易", null,
                             social("REJECT_INFORMATION_TRADE", t.getSellerPlayerId(), t.getTradeId(), null, null, null, null, null));
                 });
@@ -131,6 +163,16 @@ public class BattleSocialDecisionCandidateGenerator {
                                 + "名贡献者；立即获得2护甲，完成后另获10护甲",
                         type + " x1", social("CONTRIBUTE_OBJECTIVE", null, null, null, null,
                                 new BattleObjectiveContributionDecision(objective.getObjectiveId(), type.name(), 1), null, null));
+                int bulk = Math.min(Math.min(remaining, available - 2),
+                        totalRequired - reservedForOthers - actorContributed);
+                if (bulk > 1) {
+                    add(drafts, "CONTRIBUTE_" + type + "_X" + bulk + "_" + objective.getObjectiveId(),
+                            "向公共目标贡献 " + type + " x" + bulk + "；至少需"
+                                    + objective.getMinimumContributors() + "名贡献者；保留本回合代谢资源",
+                            type + " x" + bulk,
+                            social("CONTRIBUTE_OBJECTIVE", null, null, null, null,
+                                    new BattleObjectiveContributionDecision(objective.getObjectiveId(), type.name(), bulk), null, null));
+                }
             }
         }
     }
@@ -155,13 +197,15 @@ public class BattleSocialDecisionCandidateGenerator {
             }
             String offered = actor.getFood() >= actor.getWater() ? "FOOD" : "WATER";
             String requested = "FOOD".equals(offered) ? "WATER" : "FOOD";
-            if (!hasOpenPromise && BattleResourceInventory.amount(actor, BattleResourceType.valueOf(offered)) > 2) {
-                BattlePromiseDecision promise = new BattlePromiseDecision("GIVE_RESOURCE", offered, 1,
-                        Math.min(context.observation().publicWorld().maxRounds(),
-                                context.observation().publicWorld().roundNo() + 5));
-                add(drafts, "PROPOSE_PROMISE_P" + target.playerId(), "向 P" + target.playerId()
-                                + " 承诺在期限前给予 " + offered + " x1", offered + " x1",
-                        social("PROPOSE_PROMISE", target.playerId(), null, promise, null, null, null, null));
+            if (BattleResourceInventory.amount(actor, BattleResourceType.valueOf(offered)) > 2) {
+                if (!hasOpenPromise) {
+                    BattlePromiseDecision promise = new BattlePromiseDecision("GIVE_RESOURCE", offered, 1,
+                            Math.min(context.observation().publicWorld().maxRounds(),
+                                    context.observation().publicWorld().roundNo() + 5));
+                    add(drafts, "PROPOSE_PROMISE_P" + target.playerId(), "向 P" + target.playerId()
+                                    + " 承诺在期限前给予 " + offered + " x1", offered + " x1",
+                            social("PROPOSE_PROMISE", target.playerId(), null, promise, null, null, null, null));
+                }
                 BattleTradeDecision trade = new BattleTradeDecision(
                         List.of(new BattleTradeItemDecision(offered, 1)),
                         List.of(new BattleTradeItemDecision(requested, 1)));
@@ -169,9 +213,15 @@ public class BattleSocialDecisionCandidateGenerator {
                         + " 提议用 " + offered + " x1 换 " + requested + " x1", offered + " x1",
                         social("PROPOSE_TRADE", target.playerId(), null, null, trade, null, null, null));
             }
-            if (!context.social().rumors().isEmpty()) {
+            if (!context.social().rumors().isEmpty() && context.social().informationTradeProposals().stream()
+                    .noneMatch(t -> Objects.equals(t.getSellerPlayerId(), actorId)
+                            && t.getStatus() == BattleInformationTradeStatus.PROPOSED)) {
                 var rumor = context.social().rumors().get(context.social().rumors().size() - 1);
-                add(drafts, "PROPOSE_INFORMATION_TRADE_P" + target.playerId(), "向 P" + target.playerId()
+                boolean alreadySold = context.social().informationTradeProposals().stream().anyMatch(t ->
+                        Objects.equals(t.getSellerPlayerId(), actorId) && Objects.equals(t.getBuyerPlayerId(), target.playerId())
+                                && Objects.equals(t.getRumorId(), rumor.getRumorId())
+                                && t.getStatus() == BattleInformationTradeStatus.COMPLETED);
+                if (!alreadySold && !rumor.getKnownByPlayerIds().contains(target.playerId())) add(drafts, "PROPOSE_INFORMATION_TRADE_P" + target.playerId(), "向 P" + target.playerId()
                                 + " 出售已知传闻 " + rumor.getRumorId() + "，索取 FOOD x1", null,
                         social("PROPOSE_INFORMATION_TRADE", target.playerId(), null, null, null, null,
                                 new BattleInformationTradeDecision(rumor.getRumorId(), "FOOD", 1), null));

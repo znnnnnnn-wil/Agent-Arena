@@ -42,6 +42,8 @@ public class BattlePlayerState {
     private int ammo;
     /** 护甲值 */
     private int armor;
+    /** 防守的临时减伤，下一次受击或自己下次行动时失效。 */
+    private boolean guarded;
     /** 医疗包数量 */
     private int medkits;
     /** 未获得武器的搜索次数 */
@@ -52,8 +54,10 @@ public class BattlePlayerState {
     private int repeatedActions;
     /** 淘汰数量 */
     private int kills;
-    /** 累计伤害 */
+    /** 累计计分有效伤害；过量伤害和超过目标终身100点的伤害不累计。 */
     private int totalDamage;
+    /** 本局已分配给攻击者的计分伤害，救援或治疗不重置，以防循环刷分。 */
+    private int scoredDamageReceived;
     /** 是否处于隐藏状态 */
     private boolean hidden;
     /** 是否因长期避战而暴露，暴露时承受额外伤害。 */
