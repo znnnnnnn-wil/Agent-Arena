@@ -9,6 +9,7 @@ test('游客可以组合模型与人格创建并启动狼人杀', async ({ page 
   await page.getByRole('button', { name: /下一步：配置规则/ }).click();
   await page.getByRole('button', { name: /下一步：选择智能体/ }).click();
   await expect(page.getByRole('heading', { name: '组合模型与人格' })).toBeVisible();
+  await expect(page.locator('.seat-persona-select')).toHaveCount(8);
   const defaultPersonaIds = await page.locator('.seat-persona-select').evaluateAll((selects) => selects.map((select) => select.value));
   expect(new Set(defaultPersonaIds).size).toBe(8);
 
