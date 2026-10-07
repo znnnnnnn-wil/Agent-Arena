@@ -106,7 +106,7 @@ npm run test:e2e:visual
 
 `./mvnw verify` 还会执行 `DatabaseMigrationIT`，它需要 `ci` profile 指向一个真实 MySQL。GitHub Actions 已配置 MySQL 8.4 并执行完整后端验证和 Playwright 功能流程。
 
-视觉测试分别维护 desktop 与 mobile Chromium 基线，并在 Windows CI 上比较。页面自带 Noto Sans SC 字体；视觉配置使用 SwiftShader，并固定为云端 runner 的低功耗档位，避免系统字体、显卡和 CI 核数改变布局或阴影。大逃杀在该档位仍加载外部角色和岛屿素材，功能测试也覆盖舞台加载与更新。界面有意变化后运行 `npm run test:e2e:update` 更新基线，再运行 `npm run test:e2e:visual` 审核。功能测试按配置在本地使用 4 个 worker、CI 使用 2 个 worker。
+视觉测试分别维护 desktop 与 mobile Chromium 基线，并在 Windows CI 上比较。页面自带 Noto Sans SC 字体；视觉配置固定为云端 runner 的低功耗档位，避免系统字体和 CI 核数改变布局或阴影，并由 Chromium 选择默认渲染器。大逃杀在该档位仍加载外部角色和岛屿素材，功能测试也覆盖舞台加载与更新。界面有意变化后运行 `npm run test:e2e:update` 更新基线，再运行 `npm run test:e2e:visual` 审核。功能测试按配置在本地使用 4 个 worker、CI 使用 2 个 worker。
 
 对局列表翻页、回放游标与实时重连行为见 [读取接口说明](docs/API_READS.md)。
 
