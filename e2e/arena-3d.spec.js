@@ -105,6 +105,8 @@ test('图灵模式挂载真实 WebGL 3D 舞台', async ({ page }) => {
 });
 
 test('大逃杀第三阶段挂载协作信标并识别社会事件', async ({ page }, testInfo) => {
+  // Several full-scene world updates take over 40 seconds on hosted software renderers.
+  test.setTimeout(90_000);
   const runtimeErrors = [];
   page.on('pageerror', (error) => runtimeErrors.push(error.message));
   await page.emulateMedia({ reducedMotion: 'no-preference' });
@@ -184,6 +186,7 @@ test('大逃杀第三阶段挂载协作信标并识别社会事件', async ({ pa
 });
 
 test('@visual 大逃杀挂载 3D 岛屿、战斗轨迹与玩家标签', async ({ page }, testInfo) => {
+  test.setTimeout(90_000);
   const runtimeErrors = [];
   page.on('pageerror', (error) => runtimeErrors.push(error.message));
   await installMockApi(page);
