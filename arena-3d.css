@@ -1,0 +1,445 @@
+.arena3d-host {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  overflow: hidden;
+  border-radius: inherit;
+  background:
+    radial-gradient(circle at 50% 58%, rgba(61, 132, 149, .11), transparent 42%),
+    linear-gradient(180deg, rgba(4, 12, 17, .18), rgba(4, 8, 13, .74));
+  cursor: grab;
+  touch-action: pan-y;
+  contain: layout paint style;
+}
+
+.arena3d-host.is-dragging { cursor: grabbing; }
+.arena3d-host canvas { display: block; width: 100%; height: 100%; outline: 0; }
+.arena3d-host.arena3d-unavailable { display: grid; place-items: center; color: #8b99a5; font-size: 13px; }
+.arena3d-host.arena3d-unavailable p { padding: 16px; border: 1px solid #29353d; background: #0a1117; }
+
+.arena3d-label-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+}
+
+.battle-map .arena3d-label { min-width: 88px; gap: 5px; padding: 5px 7px; }
+.battle-map .arena3d-label b { font-size: 11px; }
+.battle-map .arena3d-label small { font-size: 9px; }
+
+@media (min-width: 721px) {
+  .battle-map.arena3d-active > .map-ring-status {
+    top: 12px; left: 12px; right: auto; bottom: auto;
+    width: 172px; transform: none; text-align: left;
+  }
+  .battle-map.arena3d-active > .battle-live-feed {
+    top: auto; bottom: 12px; left: 12px; right: auto;
+    width: 252px; max-width: 252px; transform: none;
+  }
+}
+
+@media (max-width: 720px) {
+  .battle-map .arena3d-label { min-width: 0; padding: 3px; }
+}
+
+.arena3d-label {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: flex;
+  min-width: 116px;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 9px;
+  border: 1px solid rgba(114, 215, 232, .36);
+  border-radius: 7px;
+  color: #edf8fb;
+  background: linear-gradient(135deg, rgba(8, 19, 26, .94), rgba(13, 27, 34, .78));
+  box-shadow: 0 8px 30px rgba(0, 0, 0, .24), inset 0 1px rgba(255, 255, 255, .05);
+  backdrop-filter: blur(10px);
+  pointer-events: auto;
+  transition: opacity .18s, border-color .18s, filter .18s;
+  will-change: transform;
+}
+
+.arena3d-label:hover,
+.arena3d-label.active {
+  z-index: 4;
+  border-color: #c8ff3d;
+  filter: brightness(1.14);
+}
+
+.arena3d-label > i {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 50%;
+  color: #08100e;
+  background: #c8ff3d;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 900;
+  box-shadow: 0 0 16px rgba(200, 255, 61, .32);
+}
+
+.arena3d-label span,
+.arena3d-label b,
+.arena3d-label small { display: block; min-width: 0; text-align: left; }
+.arena3d-label b { max-width: 92px; overflow: hidden; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.arena3d-label small { margin-top: 2px; color: #91a6ae; font-size: 9px; white-space: nowrap; }
+.arena3d-label.eliminated { opacity: .42 !important; filter: grayscale(1); }
+.arena3d-label.human { border-color: #52f4ff; box-shadow: 0 0 24px rgba(82, 244, 255, .16); }
+
+.arena3d-controls {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 6px 5px 10px;
+  border: 1px solid rgba(121, 164, 177, .22);
+  border-radius: 6px;
+  color: #738892;
+  background: rgba(5, 13, 18, .72);
+  font-size: 9px;
+  backdrop-filter: blur(8px);
+}
+
+.arena3d-controls button {
+  min-height: 24px;
+  padding: 0 8px;
+  border: 1px solid #31444d;
+  border-radius: 4px;
+  color: #b9cad0;
+  background: #111f26;
+  font-size: 9px;
+}
+
+.arena3d-moment-card {
+  position: absolute;
+  top: 17%;
+  left: 50%;
+  z-index: 8;
+  display: flex;
+  min-width: 248px;
+  max-width: min(420px, 58%);
+  align-items: center;
+  gap: 12px;
+  padding: 11px 16px 11px 12px;
+  border: 1px solid rgba(82, 244, 255, .5);
+  border-radius: 8px;
+  color: #f3fbfd;
+  background: linear-gradient(135deg, rgba(5, 18, 25, .96), rgba(9, 32, 40, .88));
+  box-shadow: 0 18px 60px rgba(0, 0, 0, .44), 0 0 26px rgba(82, 244, 255, .13);
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, -18px) scale(.94);
+  backdrop-filter: blur(14px);
+}
+
+.arena3d-moment-card.show { animation: arenaMomentReveal 2.6s both; }
+.arena3d-moment-card[data-action="attack"] { border-color: rgba(255, 82, 104, .72); box-shadow: 0 18px 60px rgba(0, 0, 0, .44), 0 0 30px rgba(255, 82, 104, .18); }
+.arena3d-moment-card[data-action="heal"],
+.arena3d-moment-card[data-action="rest"] { border-color: rgba(84, 226, 155, .7); }
+.arena3d-moment-card[data-action="capture"],
+.arena3d-moment-card[data-action="vote"] { border-color: rgba(255, 200, 87, .72); }
+.arena3d-moment-card[data-action="talk"] { border-color: rgba(200, 255, 61, .68); }
+
+.arena3d-moment-card > i {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 50%;
+  color: #071017;
+  background: #c8ff3d;
+  font-size: 14px;
+  font-style: normal;
+  font-weight: 900;
+  box-shadow: 0 0 22px rgba(200, 255, 61, .3);
+}
+
+.arena3d-moment-card span,
+.arena3d-moment-card small,
+.arena3d-moment-card b,
+.arena3d-moment-card em { display: block; min-width: 0; }
+.arena3d-moment-card small { color: #52f4ff; font-size: 8px; font-weight: 800; letter-spacing: .16em; }
+.arena3d-moment-card b { margin-top: 2px; overflow: hidden; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+.arena3d-moment-card em { margin-top: 2px; overflow: hidden; color: #9db0b8; font-size: 10px; font-style: normal; text-overflow: ellipsis; white-space: nowrap; }
+
+@keyframes arenaMomentReveal {
+  0% { opacity: 0; transform: translate(-50%, -18px) scale(.94); }
+  10%, 72% { opacity: 1; transform: translate(-50%, 0) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, 10px) scale(.98); }
+}
+
+/* 大逃杀：WebGL 场景接管地图，现有状态组件继续充当 HUD。 */
+.battle-map.arena3d-active { min-height: 650px; isolation: isolate; }
+.battle-rules-panel { margin-top: 12px; padding: 12px 16px; border: 1px solid #2a4145; border-radius: 10px; background: #101b20; color: #a9bbc0; font-size: 12px; }
+.battle-rules-panel summary { cursor: pointer; color: #dce8d5; }
+.battle-rules-panel p { margin: 10px 0; line-height: 1.7; }
+.battle-rules-panel div { display: flex; flex-wrap: wrap; gap: 8px; }
+.battle-rules-panel div span { padding: 5px 8px; border-radius: 5px; background: #233239; }
+.battle-map.arena3d-active > .map-grid-lines,
+.battle-map.arena3d-active > .battle-storm-vignette,
+.battle-map.arena3d-active > .battle-action-layer,
+.battle-map.arena3d-active > .battle-live-feed,
+.battle-map.arena3d-active > .map-zone { display: none; }
+.battle-map.arena3d-active > .map-ring-status,
+.battle-map.arena3d-active > .map-legend { z-index: 5; }
+.battle-map.arena3d-active > .map-ring-status { backdrop-filter: blur(12px); }
+
+/* 狼人杀：关系与席位进入真实空间，中心发言保留为可读 HUD。 */
+.werewolf-arena-v2.arena3d-active { min-height: 650px; isolation: isolate; }
+.werewolf-arena-v2.arena3d-active > .wolf-links,
+.werewolf-arena-v2.arena3d-active > .wolf-seat { display: none; }
+.werewolf-arena-v2.arena3d-active > .wolf-phase-track,
+.werewolf-arena-v2.arena3d-active > .wolf-situation-summary,
+.werewolf-arena-v2.arena3d-active > .wolf-relation-switch,
+.werewolf-arena-v2.arena3d-active > .audience-summary,
+.werewolf-arena-v2.arena3d-active > .god-view-note { z-index: 7; }
+.werewolf-arena-v2.arena3d-active > .wolf-table {
+  z-index: 6;
+  width: min(47%, 520px);
+  height: auto;
+  pointer-events: none;
+}
+.werewolf-arena-v2.arena3d-active .wolf-table-ring { display: none; }
+.werewolf-arena-v2.arena3d-active .wolf-center {
+  width: 100%;
+  padding: 14px 18px;
+  border: 1px solid rgba(168, 132, 255, .28);
+  border-radius: 8px;
+  background: rgba(8, 11, 18, .7);
+  box-shadow: 0 18px 55px rgba(0, 0, 0, .32);
+  backdrop-filter: blur(13px);
+}
+.werewolf-arena-v2.arena3d-active .wolf-center blockquote {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+/* 图灵潜伏：舞台置于内容之后，用空间、席位与聚光灯补足空白。 */
+.turing-stage-main { position: relative; isolation: isolate; }
+.turing-stage-main.arena3d-active { overflow: hidden; background: #07100e; }
+.turing-stage-main > .turing-3d-host { z-index: 0; }
+.turing-stage-main > .turing-stage-content {
+  position: relative;
+  z-index: 4;
+  min-height: 100%;
+  pointer-events: none;
+}
+.turing-stage-main > .turing-stage-content button,
+.turing-stage-main > .turing-stage-content input,
+.turing-stage-main > .turing-stage-content select,
+.turing-stage-main > .turing-stage-content textarea { pointer-events: auto; }
+.turing-stage-main.arena3d-active .turing-current-stage {
+  min-height: 100%;
+  background: linear-gradient(90deg, rgba(7, 16, 14, .88) 0, rgba(7, 16, 14, .58) 48%, rgba(7, 16, 14, .12) 100%);
+}
+.turing-stage-main.arena3d-active .turing-stage-heading { max-width: 54%; }
+.turing-stage-main.arena3d-active .turing-answer-grid,
+.turing-stage-main.arena3d-active .turing-stage-split,
+.turing-stage-main.arena3d-active .turing-bar-chart,
+.turing-stage-main.arena3d-active .turing-vote-reveal,
+.turing-stage-main.arena3d-active .turing-prompt-body,
+.turing-stage-main.arena3d-active .turing-stage-action {
+  max-width: 58%;
+  pointer-events: auto;
+}
+.turing-stage-main.arena3d-active .turing-answer-card,
+.turing-stage-main.arena3d-active .turing-conversation article,
+.turing-stage-main.arena3d-active .turing-defense-grid article,
+.turing-stage-main.arena3d-active .turing-human-form {
+  border-color: rgba(200, 255, 61, .25);
+  background: rgba(7, 17, 15, .88);
+  backdrop-filter: blur(12px);
+}
+
+@media (max-width: 1100px) {
+  .arena3d-label { min-width: 94px; padding: 5px 7px; }
+  .arena3d-label small { display: none; }
+  .battle-map.arena3d-active,
+  .werewolf-arena-v2.arena3d-active { min-height: 560px; }
+  .turing-stage-main.arena3d-active .turing-stage-heading,
+  .turing-stage-main.arena3d-active .turing-answer-grid,
+  .turing-stage-main.arena3d-active .turing-stage-split,
+  .turing-stage-main.arena3d-active .turing-bar-chart,
+  .turing-stage-main.arena3d-active .turing-vote-reveal,
+  .turing-stage-main.arena3d-active .turing-prompt-body,
+  .turing-stage-main.arena3d-active .turing-stage-action { max-width: 68%; }
+}
+
+@media (max-width: 720px) {
+  .arena3d-controls span { display: none; }
+  .arena3d-label { min-width: 0; padding: 4px; }
+  .arena3d-label span { display: none; }
+  .arena3d-label > i { width: 25px; height: 25px; }
+  .arena3d-label.active {
+    min-width: 92px;
+    gap: 5px;
+    padding: 4px 7px 4px 4px;
+  }
+  .arena3d-label.active span { display: block; }
+  .arena3d-label.active b { max-width: 58px; font-size: 10px; }
+  .arena3d-label.active small { display: none; }
+  .arena3d-moment-card {
+    top: 102px;
+    min-width: 0;
+    width: calc(100% - 76px);
+    max-width: 330px;
+    padding: 8px 10px;
+  }
+  .arena3d-moment-card > i { width: 30px; height: 30px; font-size: 11px; }
+  .arena3d-moment-card b { font-size: 11px; }
+  .battle-map.arena3d-active {
+    display: block;
+    height: 500px;
+    min-height: 500px;
+    padding: 0;
+    overflow: hidden;
+  }
+  .battle-map.arena3d-active > .map-ring-status {
+    position: absolute;
+    top: 8px;
+    right: auto;
+    bottom: auto;
+    left: 8px;
+    width: 148px;
+    padding: 8px 10px;
+    transform: none;
+    text-align: left;
+  }
+  .battle-map.arena3d-active > .map-ring-status small { display: none; }
+  .battle-map.arena3d-active > .map-ring-status b { margin-block: 2px; font-size: 12px; }
+  .battle-map.arena3d-active > .battle-live-feed {
+    position: absolute;
+    right: 8px;
+    bottom: 8px;
+    left: 8px;
+    width: auto;
+    max-width: none;
+    min-height: 0;
+    padding: 9px;
+    transform: none;
+  }
+  .battle-map.arena3d-active > .battle-live-feed > i { width: 30px; height: 30px; }
+  .battle-map.arena3d-active > .battle-live-feed p {
+    display: -webkit-box;
+    overflow: hidden;
+    white-space: normal;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 1;
+  }
+  .battle-map.arena3d-active > .map-legend { display: none; }
+
+  .werewolf-arena-v2.arena3d-active {
+    display: block;
+    height: 540px;
+    min-height: 540px;
+    padding: 0;
+    overflow: hidden;
+  }
+  .werewolf-arena-v2.arena3d-active > .wolf-phase-track {
+    position: absolute !important;
+    top: 8px !important;
+    right: 8px !important;
+    bottom: auto !important;
+    left: 8px !important;
+    display: flex;
+    width: auto;
+    overflow-x: auto;
+    gap: 5px;
+    scrollbar-width: none;
+  }
+  .werewolf-arena-v2.arena3d-active > .wolf-phase-track::-webkit-scrollbar { display: none; }
+  .werewolf-arena-v2.arena3d-active > .wolf-phase-track span {
+    min-width: 54px;
+    flex: 0 0 54px;
+    font-size: 9px;
+    white-space: nowrap;
+  }
+  .werewolf-arena-v2.arena3d-active > .wolf-relation-switch {
+    position: absolute !important;
+    top: 53px !important;
+    right: 8px !important;
+    bottom: auto !important;
+    left: 8px !important;
+    justify-content: flex-start;
+    overflow-x: auto;
+    transform: none;
+    scrollbar-width: none;
+  }
+  .werewolf-arena-v2.arena3d-active > .wolf-relation-switch::-webkit-scrollbar { display: none; }
+  .werewolf-arena-v2.arena3d-active > .wolf-relation-switch button {
+    flex: 0 0 auto;
+    padding: 6px 9px;
+    white-space: nowrap;
+  }
+  .werewolf-arena-v2.arena3d-active > .wolf-table {
+    position: absolute !important;
+    top: auto !important;
+    right: 12px !important;
+    bottom: 30px !important;
+    left: 12px !important;
+    width: auto !important;
+    height: auto !important;
+    padding: 0 !important;
+    border: 0 !important;
+    background: none !important;
+    box-shadow: none !important;
+    transform: none !important;
+  }
+  .werewolf-arena-v2.arena3d-active .wolf-center {
+    position: relative;
+    inset: auto;
+    width: 100%;
+    max-height: 118px;
+    padding: 8px 11px;
+    transform: none;
+    background: rgba(8, 11, 18, .78);
+  }
+  .werewolf-arena-v2.arena3d-active .wolf-center > small { font-size: 9px; }
+  .werewolf-arena-v2.arena3d-active .wolf-center h3 { margin-block: 3px 1px; font-size: 15px; }
+  .werewolf-arena-v2.arena3d-active .focus-agent-meta { display: none; }
+  .werewolf-arena-v2.arena3d-active .wolf-center blockquote {
+    margin-block: 5px 0;
+    font-size: 12px;
+    line-height: 1.4;
+    -webkit-line-clamp: 2;
+  }
+  .werewolf-arena-v2.arena3d-active .focus-relations { display: none; }
+  .werewolf-arena-v2.arena3d-active > .god-view-note {
+    position: absolute !important;
+    inset: auto 8px 5px !important;
+    overflow: hidden;
+    font-size: 9px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .werewolf-arena-v2.arena3d-active > .wolf-situation-summary,
+  .werewolf-arena-v2.arena3d-active > .audience-summary { display: none; }
+  .turing-stage-main > .turing-3d-host { opacity: .62; }
+  .turing-stage-main.arena3d-active .turing-stage-heading,
+  .turing-stage-main.arena3d-active .turing-answer-grid,
+  .turing-stage-main.arena3d-active .turing-stage-split,
+  .turing-stage-main.arena3d-active .turing-bar-chart,
+  .turing-stage-main.arena3d-active .turing-vote-reveal,
+  .turing-stage-main.arena3d-active .turing-prompt-body,
+  .turing-stage-main.arena3d-active .turing-stage-action { max-width: 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .arena3d-label { transition: none; }
+  .arena3d-moment-card.show { animation: none; opacity: 1; transform: translate(-50%, 0); }
+  .battle-map.arena3d-active > .battle-live-feed { display: block; }
+  .arena3d-controls > span::after { content: ' · 动效已降低'; }
+}
