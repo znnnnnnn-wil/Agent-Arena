@@ -47,6 +47,7 @@
     play.textContent = playing ? 'Ⅱ 暂停' : elapsed >= duration ? '↺ 再看一次' : '▶ 播放';
     play.setAttribute('aria-label', playing ? '暂停演示' : elapsed >= duration ? '重新播放演示' : '播放演示');
     play.setAttribute('aria-pressed', String(playing));
+    stage?.setPresentation?.({ playing });
   }
 
   function payloadFor(index, beat) {
@@ -69,7 +70,8 @@
       eventType: index === 0 && beat === 2 ? 'BATTLE_PLAYER_REVIVED' : 'BATTLE_ACTION_EXECUTED',
       actorPlayerId: 1, payload: { action: record.decision.action, targetPlayerId: record.decision.targetPlayerId,
         region: 'A', reasonSummary: record.decision.summary } }] : [];
-    return { game, players, events, publicView: true };
+    return { game, players, events, publicView: true,
+      presentation: { style: 'survival', chapter: index, localTime: elapsed - index * 20, playing } };
   }
 
   function updateScene(index, beat) {
@@ -111,6 +113,7 @@
     progress.value = String(elapsed);
     progress.setAttribute('aria-valuetext', `${seconds} 秒，共 60 秒`);
     $('demo-complete').hidden = elapsed < duration;
+    stage?.setPresentation?.({ chapter: index, localTime: local, playing: playing && elapsed < duration });
     if (elapsed >= duration) setPlaying(false);
   }
 

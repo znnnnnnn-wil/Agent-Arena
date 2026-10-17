@@ -3,16 +3,21 @@ const path = require('node:path');
 
 const root = path.resolve(__dirname, '..');
 const source = path.join(root, 'src/main/resources/static');
-const output = path.join(root, 'target/demo-site');
+const outputName = process.argv.includes('--preview') ? 'demo-site-preview' : 'demo-site';
+const output = path.join(root, 'target', outputName);
 const repository = 'https://github.com/znnnnnnn-wil/Agent-Arena';
 
 async function buildDemo() {
   // Only this explicitly named generated directory is cleared, never the checkout.
-  if (path.resolve(output) !== path.resolve(root, 'target', 'demo-site')) throw new Error('Unexpected output path');
+  if (path.resolve(output) !== path.resolve(root, 'target', outputName)) throw new Error('Unexpected output path');
+  const containsGit = await fs.stat(path.join(output, '.git')).then(() => true, error => {
+    if (error.code === 'ENOENT') return false; throw error;
+  });
+  if (containsGit) throw new Error('输出目录包含 Git 工作区；请使用 --preview 生成独立预览。');
   await fs.rm(output, { recursive: true, force: true });
   await fs.mkdir(output, { recursive: true });
   const textFiles = ['demo.html', 'demo.js', 'demo.css', 'styles.css', 'fonts.css',
-    'arena-3d.js', 'arena-3d.css', 'battle-island.js', 'battle-world.js'];
+    'arena-3d.js', 'arena-3d.css', 'battle-island.js', 'battle-world.js', 'survival-stage.js', 'survival-world.js'];
   for (const filename of textFiles) {
     let text = await fs.readFile(path.join(source, filename), 'utf8');
     if (filename === 'demo.html') {

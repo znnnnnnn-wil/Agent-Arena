@@ -75,6 +75,24 @@ test('深链接、无 WebGL 地图和剪贴板降级均可用', async ({ page })
   expect(errors).toEqual([]);
 });
 
+test('林地舞台在回退和切换片段时复用画布，并保留无医疗包时的倒地结果', async ({ page }) => {
+  await page.goto('/demo.html#t=34');
+  const host = page.locator('#demo-arena');
+  await expect(host).toHaveAttribute('data-arena3d-map-style', 'forest-survival');
+  await expect(host.getByRole('button', { name: /P2 · 倒地待援/ })).toBeVisible();
+  await host.locator('canvas').evaluate(canvas => { canvas.dataset.reuseProbe = 'retained'; });
+  await seek(page, 14);
+  await expect(host.getByRole('button', { name: /P2 · HP 30/ })).toBeVisible();
+  await seek(page, 34);
+  await expect(host.getByRole('button', { name: /P2 · 倒地待援/ })).toBeVisible();
+  await seek(page, 54);
+  await expect(host.getByRole('button', { name: /P2 · HP 80/ })).toBeVisible();
+  await expect(host.locator('canvas')).toHaveAttribute('data-reuse-probe', 'retained');
+  await expect(host.locator('canvas')).toHaveCount(1);
+  await host.getByRole('button', { name: '重置 3D 镜头' }).click();
+  await expect(host.locator('canvas')).toBeVisible();
+});
+
 test('数据加载失败有明确提示，首页入口仍可离线访问', async ({ page }) => {
   await page.route('**/assets/demo/decisions.json', (route) => route.fulfill({ status: 503, body: 'Unavailable' }));
   await page.goto('/demo.html');
