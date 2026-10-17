@@ -19,7 +19,7 @@
     "test:e2e:update": "playwright test --config playwright.visual.config.js --grep @visual --update-snapshots=all"
   },
   "devDependencies": {
-    "@playwright/test": "1.63.0"
+    "@playwright/test": "1.64.0"
   },
   "dependencies": {
     "three": "0.185.1"
