@@ -13,13 +13,15 @@ async function recordDemo() {
   try {
     browser = await chromium.launch();
     const context = await browser.newContext({ viewport: { width: 1440, height: 1120 },
-      reducedMotion: 'reduce', recordVideo: { dir: output, size: { width: 1440, height: 1120 } } });
+      reducedMotion: 'no-preference', recordVideo: { dir: output, size: { width: 1440, height: 1120 } } });
     const page = await context.newPage();
     await page.goto('http://127.0.0.1:4174/demo.html');
     await page.locator('#demo-play').waitFor({ state: 'visible' });
     await page.waitForFunction(() => !document.querySelector('#demo-play').disabled
       && document.querySelector('#demo-arena')?.dataset.arena3dAssets === '6');
     await page.evaluate(() => document.fonts.ready);
+    if (await page.locator('#demo-play').getAttribute('aria-pressed') === 'true') await page.locator('#demo-play').click();
+    await page.locator('#demo-progress').evaluate(input => { input.value = '0'; input.dispatchEvent(new Event('input')); });
     await page.screenshot({ path: path.join(output, 'desktop.png'), fullPage: true });
     await page.locator('#demo-play').click();
     await page.waitForFunction(() => Number(document.querySelector('#demo-progress').value) >= 60, null, { timeout: 90_000 });

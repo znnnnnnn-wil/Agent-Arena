@@ -13,6 +13,19 @@
 }
 
 .arena3d-host.is-dragging { cursor: grabbing; }
+.arena3d-host.survival-forest { background: #929c90; }
+.survival-forest::after { content: ''; position: absolute; inset: 0; z-index: 1; pointer-events: none; background: linear-gradient(180deg,#192c245c,transparent 23%,transparent 81%,#192c2429); }
+.survival-forest .arena3d-label { min-width: 0; padding: 4px 6px; gap: 5px; border-color: #a5b09866; border-radius: 4px; background: #29362bda; box-shadow: 0 4px 14px #14221128; }
+.survival-forest .arena3d-label > i { width: 20px; height: 20px; border-radius: 4px; background: #becbaa; color: #273326; box-shadow: none; font-size: 9px; }
+.survival-forest .arena3d-label.active { border-color: #d0dab7; filter: none; }
+.survival-forest .arena3d-label.downed { border-color: #c6ae7a; }
+.survival-forest .arena3d-label.downed > i { background: #ccbc91; }
+.survival-forest .arena3d-label.supporting { opacity: .72; }
+.survival-forest .arena3d-label b, .survival-forest .arena3d-label.supporting > span { display: none; }
+.survival-forest .arena3d-label small { color: #bec8b7; font-size: 9px; }
+.survival-forest .arena3d-controls { border-color: #96a48c55; background: #26372bca; color: #d0d7c8; }
+.survival-forest .arena3d-controls button { background: #40523d; color: #e3e7d7; border-color: #889c7566; }
+@media(max-width:540px) { .survival-forest .arena3d-label.supporting { min-width: 0; padding: 3px; }.survival-forest .arena3d-label.supporting > span { display: none; }.survival-forest .arena3d-label:not(.supporting) { min-width: 52px; } }
 .arena3d-host canvas { display: block; width: 100%; height: 100%; outline: 0; }
 .arena3d-host.arena3d-unavailable { display: grid; place-items: center; color: #8b99a5; font-size: 13px; }
 .arena3d-host.arena3d-unavailable p { padding: 16px; border: 1px solid #29353d; background: #0a1117; }
