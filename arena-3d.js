@@ -2,6 +2,7 @@ import * as THREE from './vendor/three.module.min.js';
 import { GLTFLoader } from './vendor/addons/loaders/GLTFLoader.js';
 import { clone as cloneSkeleton } from './vendor/addons/utils/SkeletonUtils.js';
 import { buildBattleIsland, buildBattleSettlement } from './battle-island.js';
+import { SurvivalStage } from './survival-stage.js';
 import './battle-world.js';
 
 const ACTIVE_STAGES = new WeakMap();
@@ -1442,12 +1443,14 @@ function mount(host, mode, payload) {
   if (!host) return null;
   const existing = ACTIVE_STAGES.get(host);
   const sameGame = playerIdEquals(existing?.payload?.game?.id, payload?.game?.id);
-  if (existing && existing.mode === mode && sameGame && !existing.disposed) {
+  const survivalStyle = mode === 'battle' && payload?.presentation?.style === 'survival';
+  if (existing && existing.mode === mode && sameGame && !existing.disposed
+      && (existing instanceof SurvivalStage) === survivalStyle) {
     existing.update(payload || {});
     return existing;
   }
   existing?.dispose();
-  const stage = new ArenaStage(host, mode, payload || {});
+  const stage = survivalStyle ? new SurvivalStage(host, payload || {}) : new ArenaStage(host, mode, payload || {});
   ACTIVE_STAGES.set(host, stage);
   return stage;
 }
