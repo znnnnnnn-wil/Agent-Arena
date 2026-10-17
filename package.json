@@ -10,6 +10,9 @@
     "node": ">=22"
   },
   "scripts": {
+    "demo": "node e2e/static-server.cjs",
+    "demo:record": "node e2e/record-demo.cjs",
+    "build:demo": "node e2e/build-demo.cjs",
     "test:e2e": "playwright test",
     "test:e2e:functional": "playwright test --grep-invert @visual",
     "test:e2e:visual": "playwright test --config playwright.visual.config.js --grep @visual",

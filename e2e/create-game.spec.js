@@ -4,7 +4,7 @@ const { installMockApi } = require('./helpers/mock-api');
 test('游客可以组合模型与人格创建并启动狼人杀', async ({ page }) => {
   await installMockApi(page, { emptyLobby: true, started: false });
   await page.goto('/');
-  await page.getByRole('button', { name: /创建我的世界|创建第一场对局/ }).first().click();
+  await page.getByRole('button', { name: /创建我的对局|创建第一场对局/ }).first().click();
 
   await page.getByRole('button', { name: /下一步：配置规则/ }).click();
   await page.getByRole('button', { name: /下一步：选择智能体/ }).click();

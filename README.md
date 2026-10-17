@@ -8,6 +8,22 @@ Spring Boot 同时托管前端和 REST/SSE API，MySQL 保存对局、事件与�
 
 [快速启动](#快速启动) · [创建第一场对局](#创建第一场对局) · [本地开发](#本地开发) · [配置说明](#配置说明) · [开发验证](#开发验证) · [相关文档](#相关文档)
 
+## 60 秒看懂项目
+
+[在线交互演示](https://znnnnnnn-wil.github.io/Agent-Arena/) · [下载演示视频](src/main/resources/static/assets/demo/Agent-Arena-60s.webm)
+
+[![观看 Agent Arena 交互演示](src/main/resources/static/assets/demo/arena-preview.jpg)](https://znnnnnnn-wil.github.io/Agent-Arena/)
+
+演示包含可旋转的 3D 大逃杀场景和三个真实模型决策节选，支持暂停、进度拖动、分段跳转、倍速及带时间位置的分享链接。决策摘自已有的 qwen-max 受控场景验收记录，场景互相独立；地图、角色位置与状态为讲解重建，不是完整比赛录像。
+
+无需数据库、登录或模型 API Key，在项目根目录运行：
+
+```bash
+npm run demo
+```
+
+打开 [60 秒演示](http://localhost:4173/demo.html?autoplay=1) 或 [项目首页](http://localhost:4173)。正常启动 Spring Boot 后也可直接访问 `/demo.html`。静态方式仅用于展示，创建真实对局仍需完整后端。公开部署后，把域名后的 `/demo.html` 链接分享给观众即可。数据来源和维护方式见 [演示说明](docs/DEMO.md)。
+
 ## 游戏模式
 
 | 模式 | 阵容与玩法 | 观战与体验重点 |

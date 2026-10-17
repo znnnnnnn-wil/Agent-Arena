@@ -2609,6 +2609,7 @@ function renderLobbyGames(games) {
   const liveLabel = document.getElementById('lobby-live-count');
   const totalLabel = document.getElementById('lobby-game-count');
   const continueButton = document.getElementById('continue-latest-game');
+  if (continueButton) continueButton.hidden = false;
   let moreButton = document.getElementById('lobby-load-more');
   if (grid && !moreButton) {
     moreButton = document.createElement('button');
@@ -2672,7 +2673,13 @@ async function loadLobbyGames() {
     lobbyHasMore = lobbyGames.length === LOBBY_PAGE_SIZE;
     renderLobbyGames(lobbyGames);
   } catch (error) {
-    if (grid) grid.innerHTML = `<div class="lobby-empty error"><span>!</span><h3>对局列表加载失败</h3><p>${escapeHtml(error.message)}</p><button class="secondary" type="button" data-retry-lobby>重新加载</button></div>`;
+    const liveLabel = document.getElementById('lobby-live-count');
+    const totalLabel = document.getElementById('lobby-game-count');
+    const continueButton = document.getElementById('continue-latest-game');
+    if (liveLabel) liveLabel.textContent = '真实对局暂未连接，60 秒演示仍可直接观看';
+    if (totalLabel) totalLabel.textContent = '未连接';
+    if (continueButton) continueButton.hidden = true;
+    if (grid) grid.innerHTML = `<div class="lobby-empty error"><span>⌁</span><h3>先看一场 AI 如何做选择</h3><p>真实对局暂时无法加载。演示无需后端或模型配置，可以直接观看。</p><a class="primary" href="/demo.html?autoplay=1" style="text-decoration:none">观看 60 秒演示 ↗</a><button class="text-button" type="button" data-retry-lobby>重新连接真实对局</button></div>`;
     grid?.querySelector('[data-retry-lobby]')?.addEventListener('click', loadLobbyGames);
   }
 }

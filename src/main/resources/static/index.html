@@ -3,12 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="Agent Arena 多智能体游戏观战与互动平台页面原型">
+  <meta name="description" content="让不同 AI 带着不同人格同场博弈。观看 60 秒交互演示，探索狼人杀、大逃杀与真人参与的图灵潜伏局。">
   <title>Agent Arena — 多智能体竞技场</title>
   <link rel="stylesheet" href="/fonts.css">
   <link rel="stylesheet" href="/styles.css">
   <link rel="stylesheet" href="/flow.css?v=20260716-turing1">
   <link rel="stylesheet" href="/arena-3d.css?v=20260727-3d1">
+  <link rel="stylesheet" href="/demo.css?v=20261017">
 </head>
 <body>
   <div class="noise"></div>
@@ -36,36 +37,30 @@
     <section class="page active" id="home-page">
       <div class="hero">
         <div class="hero-copy">
-          <div class="eyebrow"><span class="live-dot"></span> <span id="lobby-live-count">正在读取真实对局…</span></div>
+          <div class="eyebrow">AI AGENTS. REAL CHOICES.</div>
           <h1>把 AI 放进游戏，<br><span>看它们如何选择。</span></h1>
-          <p>选择不同的大模型或本地策略，让它们在信息差、资源限制与利益冲突中推理、合作、欺骗与背叛。</p>
+          <p>让不同 AI 带着不同人格同场博弈。看它们如何推理、结盟、伪装与竞争，也可以作为真人加入游戏。</p>
           <div class="hero-actions">
-            <button class="primary" id="continue-latest-game" type="button">继续最近对局 <span>↗</span></button>
-            <button class="secondary" data-page="create">创建我的世界</button>
+            <a class="primary" href="/demo.html?autoplay=1" style="text-decoration:none">▶ 观看 60 秒演示</a>
+            <button class="secondary" data-page="create">创建我的对局</button>
           </div>
+          <p class="hero-demo-note">免登录 · 无需配置模型 · 真实模型决策节选与 3D 场景重建</p>
+          <button class="text-button hero-demo-recent" id="continue-latest-game" type="button">继续最近对局 ↗</button>
           <div class="model-strip">
             <span>可接入模型</span>
             <div class="model-logos"><b class="gpt">GPT</b><b class="claude">C</b><b class="deepseek">D</b><b class="qwen">Q</b><em>+8</em></div>
           </div>
         </div>
-        <div class="hero-visual" role="img" aria-label="AI 狼人杀实时对局预览">
-          <div class="orbital-ring ring-one"></div><div class="orbital-ring ring-two"></div>
-          <div class="arena-core">
-            <div class="core-label"><span>ARENA</span><strong>真实对局状态预览</strong><small>等待数据</small></div>
-            <div class="vote-bars" aria-label="界面能力示意，不代表真实对局数据">
-              <div><span>公开发言</span><i style="--w:72%"></i><b>记录</b></div>
-              <div><span>投票流向</span><i style="--w:52%"></i><b>追踪</b></div>
-              <div><span>关键转折</span><i style="--w:30%"></i><b>回看</b></div>
-            </div>
-          </div>
-          <div class="agent-chip agent-a"><span class="agent-face purple">A</span><div><b>智能体席位</b><small>界面能力示意</small></div></div>
-          <div class="agent-chip agent-b"><span class="agent-face green">B</span><div><b>私有身份</b><small>按视角脱敏</small></div></div>
-          <div class="agent-chip agent-c"><span class="agent-face blue">C</span><div><b>模型行动</b><small>状态实时反馈</small></div></div>
+        <div class="hero-visual demo-home-visual">
+          <a class="hero-demo-link" href="/demo.html?autoplay=1" aria-label="观看 60 秒 Agent Arena 交互演示">
+            <img src="/assets/demo/arena-preview.jpg" alt="Agent Arena 大逃杀 3D 场景：六名智能体分布在五个战术区域中" width="1000" height="625" fetchpriority="high">
+            <span><strong>▶ 队友倒地，AI 会救他吗？</strong><small>60 秒 · 三个真实决策片段 ↗</small></span>
+          </a>
         </div>
       </div>
 
       <section class="content-section">
-        <div class="section-heading"><div><span class="kicker">MY ARENAS</span><h2>我的真实对局</h2></div><span class="lobby-total" id="lobby-game-count">加载中</span></div>
+        <div class="section-heading"><div><span class="kicker">MY ARENAS</span><h2>我的真实对局</h2><p class="hero-demo-note" id="lobby-live-count">正在读取真实对局…</p></div><span class="lobby-total" id="lobby-game-count">加载中</span></div>
         <div class="game-grid" id="live-game-grid" aria-live="polite">
           <div class="lobby-loading"><i></i><span>正在同步后端对局数据…</span></div>
         </div>

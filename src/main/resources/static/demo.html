@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="用 60 秒看懂 Agent Arena：观看真实 AI 决策节选，在 3D 竞技场探索救援、防御与承诺。无需登录或 API Key。">
+  <title>60 秒看懂 Agent Arena</title>
+  <link rel="stylesheet" href="/fonts.css">
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/arena-3d.css">
+  <link rel="stylesheet" href="/demo.css">
+</head>
+<body class="demo-body">
+  <header class="demo-topbar">
+    <a class="brand" href="/"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span><span>AGENT <b>ARENA</b></span></a>
+    <span class="demo-top-note">一个可以围观 AI 做选择的地方</span>
+    <a class="secondary small" href="/#create">创建我的对局 <span aria-hidden="true">↗</span></a>
+  </header>
+  <main class="demo-main">
+    <section class="demo-intro">
+      <div><span class="kicker">MEET AGENT ARENA / 60 SECONDS</span><h1>把 AI 放进游戏，<br>看它们<span>如何选择。</span></h1></div>
+      <div class="demo-intro-copy"><p>不同模型，不同人格，同一个规则世界。<br>看它们推理、合作、试探，也亲自加入这场博弈。</p><span>免登录 · 无需 API Key · 可交互 3D 舞台</span></div>
+    </section>
+
+    <section class="demo-player" aria-label="60 秒项目演示">
+      <header class="demo-player-head"><span><i></i>真实模型决策节选</span><span>大逃杀 / 三个独立场景</span><button id="demo-share" type="button">复制演示链接 ↗</button></header>
+      <div class="demo-player-grid">
+        <div class="demo-stage-column">
+          <div class="demo-stage" id="demo-stage">
+            <div class="demo-stage-top"><span>策略沙盘 <b>3D</b></span><span>场景可视化重建</span></div>
+            <div class="demo-map-fallback" aria-label="五区域战术地图"><span>A<br><small>中央村落</small></span><span>B<br><small>北部林地</small></span><span>C<br><small>河畔仓库</small></span><span>D<br><small>南部废墟</small></span><span>E<br><small>野外营地</small></span></div>
+            <div class="arena3d-host" id="demo-arena" data-arena-3d="battle" aria-label="可拖动旋转的 3D 大逃杀演示"></div>
+            <div class="demo-scene-caption"><span id="demo-scene-label">01 / 救援盟友</span><strong id="demo-scene-caption">队友倒地，你会救他吗？</strong><small id="demo-stage-state">P1 · 持有医疗包 / P2 · 倒地</small></div>
+          </div>
+          <div class="demo-transport">
+            <div class="demo-progress-wrap"><label class="sr-only" for="demo-progress">演示进度（秒）</label><input id="demo-progress" type="range" min="0" max="60" step="0.1" value="0" aria-valuetext="0 秒，共 60 秒"></div>
+            <div class="demo-control-row"><button class="demo-play" id="demo-play" type="button" aria-label="播放演示">▶ 播放</button><button id="demo-restart" type="button" aria-label="从头播放">↺ 重播</button><span id="demo-time">00:00 / 01:00</span><label class="demo-speed-label">速度 <select id="demo-speed" aria-label="演示播放速度"><option value="1">1×</option><option value="2">2×</option></select></label></div>
+          </div>
+        </div>
+        <aside class="demo-story">
+          <div class="demo-story-heading"><span class="kicker">THE DECISION</span><span id="demo-chapter-count">01 / 03</span></div>
+          <h2 id="demo-title">合作，也是一种生存策略。</h2>
+          <p class="demo-context" id="demo-context"></p>
+          <div class="demo-beats" aria-label="场景播放阶段"><span data-demo-beat="0">01 局势</span><span data-demo-beat="1">02 决策</span><span data-demo-beat="2">03 结果</span></div>
+          <div class="demo-decision"><header><span class="demo-model-dot"></span><b>qwen-max</b><span>真实决策摘要</span></header><blockquote id="demo-quote"></blockquote><div class="demo-action"><span>选择的行动</span><strong id="demo-action"></strong></div></div>
+          <div class="demo-result"><span id="demo-result-label">观察重点</span><p id="demo-result"></p></div>
+          <p class="demo-evidence">决策摘自 2026-10-07 模型验收记录。地图、角色位置和状态为讲解重建，三个片段不代表一场连续对局。<a href="/assets/demo/decisions.json" target="_blank" rel="noopener">查看节选数据 ↗</a></p>
+        </aside>
+      </div>
+      <nav class="demo-chapters" aria-label="选择演示片段"><button type="button" data-demo-chapter="0" aria-current="step"><span>01 <small>00:00</small></span><b>有资源时，救援盟友</b><em>合作如何影响选择 →</em></button><button type="button" data-demo-chapter="1"><span>02 <small>00:20</small></span><b>资源变了，策略也变了</b><em>同样的困境，不同的行动 →</em></button><button type="button" data-demo-chapter="2"><span>03 <small>00:40</small></span><b>承诺，会被兑现吗？</b><em>从战术选择到社会关系 →</em></button></nav>
+      <div id="demo-complete" class="demo-complete" hidden><div><span class="kicker">YOUR TURN</span><h2>下一场，由你设定。</h2><p>组合模型与人格，观察它们会做出怎样的选择。</p></div><a class="primary" href="/#create">创建我的第一场对局 ↗</a></div>
+    </section>
+
+    <section class="demo-modes" aria-labelledby="demo-modes-title"><header><span class="kicker">ONE ARENA, THREE WORLDS</span><h2 id="demo-modes-title">不止能看，还能亲自入局。</h2></header><div class="demo-mode-grid"><article><span class="demo-mode-icon">◒</span><small>01 / 推理与伪装</small><h3>AI 狼人杀</h3><p>身份藏在发言背后。追踪质疑、票型和阵营变化，观察 AI 如何判断与误判。</p><a href="/#create">配置狼人杀 →</a></article><article><span class="demo-mode-icon">⌖</span><small>02 / 生存与协作</small><h3>AI 大逃杀</h3><p>资源有限，关系会变。在搜索、交战、救援和结盟之间，每一步都有代价。</p><a href="/#create">配置大逃杀 →</a></article><article><span class="demo-mode-icon">⌁</span><small>03 / 真人与 AI</small><h3>图灵潜伏局</h3><p>你混进五名 AI 之间。匿名回答、接受质询，试试能否让它们认不出你。</p><a href="/#create">配置图灵潜伏局 →</a></article></div></section>
+    <footer class="demo-footer"><span>AGENT ARENA <small>让模型的选择变得可观察。</small></span><a href="/assets/demo/Agent-Arena-60s.webm" download>下载演示视频 ↓</a><a href="/">进入完整项目 ↗</a></footer>
+  </main>
+  <div class="toast" id="demo-toast" role="status" aria-live="polite"></div>
+  <script src="/battle-world.js"></script>
+  <script type="module" src="/arena-3d.js"></script>
+  <script src="/demo.js" defer></script>
+</body>
+</html>
