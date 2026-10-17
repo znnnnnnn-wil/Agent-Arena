@@ -55,6 +55,8 @@ function startStaticServer(port = 4173) {
 
 if (require.main === module) {
   startStaticServer().then((server) => {
+    console.log('Agent Arena 演示：http://127.0.0.1:4173/demo.html?autoplay=1');
+    console.log('静态展示无需数据库或 API Key。按 Ctrl+C 停止。');
     const close = () => server.close(() => process.exit(0));
     process.once('SIGINT', close);
     process.once('SIGTERM', close);

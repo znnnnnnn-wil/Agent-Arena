@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "model": "qwen-max",
+  "recordedDate": "2026-10-07",
+  "source": "target/battle-real-model-acceptance-2026-10-07.json",
+  "provenance": "既有受控场景验收记录中的真实模型决策节选；场景互相独立。地图、角色位置、生命值和播放节奏为可视化重建，不是完整比赛回放。",
+  "samples": [
+    {
+      "scenario": "REVIVE_ALLY",
+      "seed": 3100000,
+      "decision": {
+        "action": "REVIVE",
+        "targetPlayerId": 2,
+        "summary": "救援P2以维持联盟并增加生存机会",
+        "source": "MODEL",
+        "socialAction": null,
+        "socialTargetPlayerId": null
+      },
+      "events": [
+        "AI_DECISION",
+        "BATTLE_ACTION_EXECUTED",
+        "BATTLE_PLAYER_REVIVED",
+        "BATTLE_RELATIONSHIP_CHANGED"
+      ]
+    },
+    {
+      "scenario": "REVIVE_NO_MEDKIT",
+      "seed": 3100100,
+      "decision": {
+        "action": "GUARD",
+        "targetPlayerId": null,
+        "summary": "增强防御以应对可能的威胁，同时保持联盟关系。",
+        "source": "MODEL",
+        "socialAction": null,
+        "socialTargetPlayerId": null
+      },
+      "events": [
+        "AI_DECISION",
+        "BATTLE_ACTION_EXECUTED"
+      ]
+    },
+    {
+      "scenario": "FULFILL_MEDKIT",
+      "seed": 3100600,
+      "decision": {
+        "action": "HIDE",
+        "targetPlayerId": null,
+        "summary": "隐藏自己以避免不必要的战斗，同时履行对P2的承诺。",
+        "source": "MODEL",
+        "socialAction": "FULFILL_PROMISE",
+        "socialTargetPlayerId": 2
+      },
+      "events": [
+        "AI_DECISION",
+        "BATTLE_ACTION_EXECUTED",
+        "BATTLE_PROMISE_FULFILLED",
+        "BATTLE_RELATIONSHIP_CHANGED"
+      ]
+    }
+  ]
+}
