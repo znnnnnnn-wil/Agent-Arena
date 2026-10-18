@@ -456,3 +456,39 @@
   .battle-map.arena3d-active > .battle-live-feed { display: block; }
   .arena3d-controls > span::after { content: ' · 动效已降低'; }
 }
+
+/* Formal matches share the showcase's quiet forest palette and articulated cast. */
+.survival-match .arena3d-label { min-width: 0; padding: 4px 6px; border-radius: 4px; }
+.survival-match .arena3d-label:not(.supporting) { min-width: 0; }
+.survival-match .arena3d-label > span { display: none; }
+.survival-match .arena3d-label.active > span,
+.survival-match .arena3d-label:hover > span,
+.survival-match .arena3d-label:focus-visible > span,
+.survival-match .arena3d-label.downed > span { display: block; }
+.survival-match .arena3d-label.active b,
+.survival-match .arena3d-label:hover b,
+.survival-match .arena3d-label:focus-visible b { display: block; max-width: 70px; font-size: 10px; }
+.survival-match .arena3d-label.active small,
+.survival-match .arena3d-label.downed small { display: block; font-size: 9px; }
+.survival-match .arena3d-label > i { width: 21px; height: 21px; }
+.survival-region-label { position: absolute; top: 0; left: 0; color: #f1eedb; font-size: 10px; letter-spacing: .08em; white-space: nowrap; text-shadow: 0 1px 4px #263428; padding: 3px 7px; background: #3a483754; border: 1px solid #d0d5b830; border-radius: 3px; pointer-events: none; }
+.survival-match .arena3d-moment-card { top: auto; bottom: 55px; max-width: calc(100% - 28px); border-color: #a8b28a80; background: #263328eb; box-shadow: 0 10px 30px #1720193b; }
+.survival-match .arena3d-moment-card > i { background: #c2cba4; box-shadow: none; }
+.survival-match .arena3d-moment-card small { color: #c4ceab; }
+.survival-match .arena3d-moment-card em { color: #c2c7b7; }
+.survival-match .arena3d-moment-card[data-action="attack"] { border-color: #c29b7a; box-shadow: 0 10px 30px #1720193b; }
+.forest-match-map { border-color: #65725b; background: #929c90; }
+.forest-match-map > .map-ring-status { border-color: #a6b39455; color: #e6ead8; background: #2a392bde; }
+.forest-match-map > .map-ring-status span,
+.forest-match-map > .map-ring-status small { color: #c3cbb6; }
+.forest-match-map > .map-ring-status b { color: #edf0df; }
+.forest-match-map .ring-meter i.active { background: #c1bf91; box-shadow: none; }
+.forest-match-map > .map-legend { border-color: #a6b39444; background: #2a392be8; color: #d8deca; }
+.forest-match-map > .battle-live-feed { border-color: #a6b39455; background: #2a392be8; box-shadow: none; }
+.forest-match-map > .battle-live-feed > i { color: #d2d5ac; background: #4b5b42; box-shadow: none; }
+@media (max-width: 720px) {
+  .survival-match .arena3d-label.downed > span { display: none; }
+  .survival-region-label { font-size: 8px; padding: 2px 4px; }
+  .survival-match .arena3d-label.active small { display: none; }
+  .survival-match .arena3d-moment-card { bottom: 48px; }
+}
