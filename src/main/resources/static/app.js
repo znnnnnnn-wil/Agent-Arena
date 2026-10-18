@@ -1424,7 +1424,7 @@ function renderBattleMap(players, game, eventGroups) {
   const aliveCount = players.filter((player) => player.status === 'ALIVE').length;
   const armedCount = players.filter((player) => player.status === 'ALIVE' && player.armed).length;
   return `<div class="battle-map ring-stage-${ringStage}" style="--ring-pressure:${ringStage * 8}px">
-    <div class="arena3d-host" data-arena-3d="battle" aria-label="可旋转的 3D 大逃杀战术岛屿"></div>
+    <div class="arena3d-host" data-arena-3d="battle" aria-label="可旋转的 3D 林地生存战术地图"></div>
     <div class="map-grid-lines"></div>
     <div class="battle-storm-vignette"></div>
     <svg class="battle-action-layer" viewBox="0 0 1000 720" preserveAspectRatio="none" aria-hidden="true"><defs><marker id="battle-trace-arrow" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 Z" /></marker></defs>${actionTrace}</svg>

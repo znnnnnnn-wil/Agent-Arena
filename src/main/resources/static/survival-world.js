@@ -12,22 +12,23 @@ function mesh(parent, geometry, material, position = [0, 0, 0]) {
 const box = (parent, size, material, at) => mesh(parent, new THREE.BoxGeometry(...size), material, at);
 const sphere = (parent, radius, material, at, detail = 16) => mesh(parent, new THREE.SphereGeometry(radius, detail, 12), material, at);
 const capsule = (parent, radius, length, material, at) => mesh(parent, new THREE.CapsuleGeometry(radius, Math.max(.01, length - 2 * radius), 5, 12), material, at);
-const REGIONS = { A: [0, 0], B: [-5.8, -4.4], C: [6.2, -4.5], D: [6, 4.2], E: [-5.8, 4.1] };
+export const SURVIVAL_REGIONS = { A: [0, 0], B: [-5.8, -4.4], C: [6.2, -4.5], D: [6, 4.2], E: [-5.8, 4.1] };
+const REGIONS = SURVIVAL_REGIONS;
 const PALETTE = [0x697d65, 0x9b805e, 0x687b80, 0x867c65, 0x5b7166, 0x858c73, 0x817968, 0x6c767b];
 
 function seeded(seed = 2781) { return () => { seed = seed * 16807 % 2147483647; return seed / 2147483647; }; }
-function terrainTexture(random) {
+function terrainTexture(random, extent = 25) {
   const canvas = document.createElement('canvas'); canvas.width = canvas.height = 1024;
   const ctx = canvas.getContext('2d'); ctx.fillStyle = '#64745c'; ctx.fillRect(0, 0, 1024, 1024);
   for (let i = 0; i < 8500; i++) {
     ctx.fillStyle = i % 3 ? 'rgba(30,43,30,.035)' : 'rgba(212,203,174,.045)';
     ctx.beginPath(); ctx.ellipse(random() * 1024, random() * 1024, .7 + random() * 4, .5 + random() * 2, random() * 6, 0, Math.PI * 2); ctx.fill();
   }
-  const point = (x, z) => [(x / 25 + .5) * 1024, (z / 25 + .5) * 1024];
+  const point = (x, z) => [(x / extent + .5) * 1024, (z / extent + .5) * 1024];
   Object.values(REGIONS).slice(1).forEach(([x, z]) => {
     ctx.beginPath(); ctx.moveTo(...point(-.3, .3)); ctx.quadraticCurveTo(...point(x * .5, z * .25), ...point(x, z));
-    ctx.lineCap = 'round'; ctx.lineWidth = 31; ctx.strokeStyle = '#99977b'; ctx.stroke();
-    ctx.lineWidth = 19; ctx.strokeStyle = '#b1a58a'; ctx.stroke();
+    ctx.lineCap = 'round'; ctx.lineWidth = 31 * 25 / extent; ctx.strokeStyle = '#99977b'; ctx.stroke();
+    ctx.lineWidth = 19 * 25 / extent; ctx.strokeStyle = '#b1a58a'; ctx.stroke();
   });
   const texture = new THREE.CanvasTexture(canvas); texture.colorSpace = THREE.SRGBColorSpace;
   texture.wrapS = texture.wrapT = THREE.RepeatWrapping; texture.anisotropy = 4; return texture;
@@ -82,6 +83,20 @@ function crate(parent, x, z, scale = 1) {
   for (const x of [-.3, .3]) box(group, [.055, .63, .63], cloth(0x595a47), [x, 0, 0]);
 }
 
+function cabin(parent, x, z, scale = 1) {
+  const group = new THREE.Group(); group.position.set(x, 0, z); group.scale.setScalar(scale); parent.add(group);
+  const timber = cloth(0x8b8065), trim = cloth(0x5a604c);
+  box(group, [2.2, .15, 1.5], trim, [0, .12, 0]);
+  box(group, [2.1, 1.4, 1.4], timber, [0, .88, 0]);
+  for (let i = 0; i < 8; i++) box(group, [2.13, .018, .018], trim, [0, .3 + i * .16, .71]);
+  box(group, [.46, 1.02, .035], cloth(0x464e3c), [-.48, .68, .73]);
+  box(group, [.52, .47, .04], trim, [.48, 1, .73]);
+  box(group, [.42, .35, .045], cloth(0x919d90, { roughness: .35 }), [.48, 1, .76]);
+  for (const sign of [-1, 1]) {
+    const roof = box(group, [1.43, .07, 1.8], cloth(0x5b6755), [sign * .58, 1.74, 0]); roof.rotation.z = -sign * .38;
+  }
+}
+
 function limb(parent, x, y, length, width, upperMaterial, lowerMaterial, handMaterial, leg = false) {
   const joint = new THREE.Group(); joint.position.set(x, y, 0); parent.add(joint);
   capsule(joint, width, length, upperMaterial, [0, -length / 2, 0]);
@@ -122,11 +137,10 @@ export function createSurvivor(parent, player) {
   for (const x of [-.11, .11]) box(torso, [.11, .12, .025], cloth(color).clone(), [x, .23, .162]);
   box(torso, [.075, .11, .018], cloth(0xd6c9a7), [-.1, .43, .167]);
   const equipment = new THREE.Group(); torso.add(equipment);
-  if (player.armed || player.weaponName) {
-    box(equipment, [.08, .1, .48], cloth(0x344239, { metalness: .15 }), [.29, .27, .17]);
-    box(equipment, [.04, .05, .25], cloth(0x28372e), [.29, .28, .48]);
-  }
-  return { root, hips, torso, head, arms, legs, hipHeight, player };
+  box(equipment, [.08, .1, .48], cloth(0x344239, { metalness: .15 }), [.29, .27, .17]);
+  box(equipment, [.04, .05, .25], cloth(0x28372e), [.29, .28, .48]);
+  equipment.visible = Boolean(player.armed || player.weaponName);
+  return { root, hips, torso, head, arms, legs, equipment, hipHeight, player };
 }
 
 export function resetPose(actor) {
@@ -146,13 +160,13 @@ export function crouch(actor, amount, time = 0, reach = false) {
   });
 }
 
-export function makeForest(scene, players) {
+export function makeForest(scene, players, { battle = false, lowPower = false } = {}) {
   const root = new THREE.Group(); scene.add(root); const foliage = [], random = seeded();
-  const texture = terrainTexture(random);
+  const texture = terrainTexture(random, battle ? 70 : 25);
   const ground = mesh(root, new THREE.PlaneGeometry(70, 70, 1, 1), cloth(0xffffff, { map: texture }), [0, -.015, 0]); ground.rotation.x = -Math.PI / 2;
-  texture.repeat.set(70 / 25, 70 / 25); texture.offset.set(-.9, -.9);
+  if (!battle) { texture.repeat.set(70 / 25, 70 / 25); texture.offset.set(-.9, -.9); }
   // No foreground trees in the camera's principal action corridor.
-  for (let i = 0; i < 34; i++) {
+  for (let i = 0; i < (lowPower ? 24 : 34); i++) {
     const x = (i % 17 - 8) * 1.5, z = -6 - Math.floor(i / 17) * 3 - random() * 2;
     (i % 5 ? pine : birch)(root, x, z, 1.05 + random() * .4, random, foliage);
   }
@@ -160,6 +174,17 @@ export function makeForest(scene, players) {
   tent(root, 3.2, -2.3, .15); tent(root, -6, 4.2, -.2);
   crate(root, 2.8, .25, .85); crate(root, 3.6, -.1, .65);
   crate(root, 6.1, -4.5); crate(root, 6.9, -4.1, .75);
+  if (battle) {
+    // Keep all five player clearings unobstructed, with landmarks behind them.
+    tent(root, -7.4, -5.8, -.4); crate(root, -4.2, -6, .7);
+    cabin(root, -.6, -2.8, .9); cabin(root, 6.7, -6.7, .9);
+    const planks = cloth(0x8b8065), concrete = cloth(0x8c8b78);
+    box(root, [2.4, .16, 1.1], planks, [6.2, .65, -6.3]);
+    for (const x of [5.2, 7.2]) box(root, [.12, .65, .85], planks, [x, .32, -6.3]);
+    box(root, [2.5, .9, .22], concrete, [6, .45, 6.3]);
+    box(root, [.25, 1.3, 1.7], concrete, [8, .65, 5.7]);
+    crate(root, 4.3, 6.1, .7); crate(root, -7.6, 5.8, .8);
+  }
   const rockGeometry = new THREE.DodecahedronGeometry(1, 1), rockMaterial = cloth(0x8a8c78);
   const rocks = new THREE.InstancedMesh(rockGeometry, rockMaterial, 44), dummy = new THREE.Object3D();
   for (let i = 0; i < 44; i++) {

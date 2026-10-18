@@ -17,7 +17,7 @@ async function buildDemo() {
   await fs.rm(output, { recursive: true, force: true });
   await fs.mkdir(output, { recursive: true });
   const textFiles = ['demo.html', 'demo.js', 'demo.css', 'styles.css', 'fonts.css',
-    'arena-3d.js', 'arena-3d.css', 'battle-island.js', 'battle-world.js', 'survival-stage.js', 'survival-world.js'];
+    'arena-3d.js', 'arena-3d.css', 'battle-island.js', 'battle-world.js', 'survival-stage.js', 'survival-world.js', 'survival-actions.js'];
   for (const filename of textFiles) {
     let text = await fs.readFile(path.join(source, filename), 'utf8');
     if (filename === 'demo.html') {

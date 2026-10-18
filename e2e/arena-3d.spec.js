@@ -160,15 +160,18 @@ test('大逃杀第三阶段挂载协作信标并识别社会事件', async ({ pa
   expect(worldUpdates.removed).toEqual({ supply: '', visible: false });
   expect(worldUpdates.fallbackSafe).toEqual(['B', 'D', 'E']);
   if (testInfo.project.name.includes('mobile')) {
-    const distance = await page.evaluate(({ battlePlayers, battleEvents }) => {
+    await page.evaluate(({ battlePlayers, battleEvents }) => {
       const host = document.querySelector('[data-arena-3d="battle"]');
       const payload = { game: { id: 88, mode: 'BATTLE_ROYALE', currentRound: 4 }, players: battlePlayers, events: battleEvents };
       const stage = window.AgentArena3D.mount(host, 'battle', payload);
       payload.players = battlePlayers.map((player, index) => index === 0 ? { ...player, region: 'D' } : player);
       stage.update(payload);
-      return stage.agents.get(String(battlePlayers[0].id)).position.distanceTo(stage.battlePositionForPlayer(payload.players[0], payload.players));
+      window.mobileBattleStage = stage;
     }, { battlePlayers: players, battleEvents: events });
-    expect(distance).toBeLessThan(0.001);
+    await expect.poll(() => page.evaluate(() => {
+      const stage = window.mobileBattleStage;
+      return stage.agents.get('101').position.distanceTo(stage.battlePositionForPlayer(stage.payload.players[0]));
+    }), { timeout: 10000 }).toBeLessThan(.001);
   }
   await page.locator('.battle-rules-panel summary').click();
   await expect(page.locator('.battle-rules-panel')).toContainText('减免下一次受击8点伤害');
@@ -185,7 +188,7 @@ test('大逃杀第三阶段挂载协作信标并识别社会事件', async ({ pa
   expect(runtimeErrors).toEqual([]);
 });
 
-test('@visual 大逃杀挂载 3D 岛屿、战斗轨迹与玩家标签', async ({ page }, testInfo) => {
+test('@visual 大逃杀挂载林地生存地图、战斗轨迹与玩家标签', async ({ page }, testInfo) => {
   test.setTimeout(90_000);
   const runtimeErrors = [];
   page.on('pageerror', (error) => runtimeErrors.push(error.message));
@@ -242,10 +245,10 @@ test('@visual 大逃杀挂载 3D 岛屿、战斗轨迹与玩家标签', async ({
   await expect(page.locator('.battle-map .arena3d-label')).toHaveCount(8);
   await expect(page.locator('[data-arena-3d="battle"]')).toHaveAttribute('data-arena3d-assets', '8', { timeout: 15000 });
   await expect(page.locator('.battle-map .battle-live-feed')).toContainText('攻击');
-  await expect(page.locator('[data-arena-3d="battle"]')).toHaveAttribute('data-arena3d-battle-style', 'survivors');
-  await expect(page.locator('[data-arena-3d="battle"]')).toHaveAttribute('data-arena3d-map-style', 'survival-island');
+  await expect(page.locator('[data-arena-3d="battle"]')).toHaveAttribute('data-arena3d-battle-style', 'forest-survivors');
+  await expect(page.locator('[data-arena-3d="battle"]')).toHaveAttribute('data-arena3d-map-style', 'forest-survival');
   await expect(page.locator('[data-arena-3d="battle"]')).toHaveAttribute('data-arena3d-scenery', 'ready', { timeout: 15000 });
-  await expect(page.locator('[data-arena-3d="battle"]')).toHaveAttribute('data-arena3d-asset-mode', 'external');
+  await expect(page.locator('[data-arena-3d="battle"]')).toHaveAttribute('data-arena3d-asset-mode', 'procedural-rigged');
   expect(runtimeErrors).toEqual([]);
   // Reduced-motion stages have no continuous render loop; resizing must still repaint them.
   const viewport = page.viewportSize();

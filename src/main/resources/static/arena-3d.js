@@ -1,14 +1,14 @@
 import * as THREE from './vendor/three.module.min.js';
 import { GLTFLoader } from './vendor/addons/loaders/GLTFLoader.js';
 import { clone as cloneSkeleton } from './vendor/addons/utils/SkeletonUtils.js';
-import { buildBattleIsland, buildBattleSettlement } from './battle-island.js';
+import { makeForest, createSurvivor, SURVIVAL_REGIONS } from './survival-world.js';
+import { poseSurvivor } from './survival-actions.js';
 import { SurvivalStage } from './survival-stage.js';
 import './battle-world.js';
 
 const ACTIVE_STAGES = new WeakMap();
 const GLTF_LOADER = new GLTFLoader();
 const GLTF_CACHE = new Map();
-const TEXTURE_CACHE = new Map();
 let HUMANOID_CLIPS_PROMISE;
 const ASSETS = {
   humanMale: './assets/3d/quaternius/universal-base/Superhero_Male_FullBody.gltf',
@@ -16,18 +16,6 @@ const ASSETS = {
   humanoidClips: './assets/3d/quaternius/animations/humanoid-clips.json',
   eyeDrone: './assets/3d/quaternius/eye-drone/Enemy_EyeDrone.gltf'
 };
-ASSETS.survivor = './assets/3d/kenney/survivors/survivor.glb';
-ASSETS.survivorSkins = ['survivorMaleB.png', 'survivorFemaleA.png'];
-
-function loadSurvivorSkin(seat) {
-  const url = `./assets/3d/kenney/survivors/${ASSETS.survivorSkins[Math.abs(Number(seat || 1) - 1) % 2]}`;
-  if (!TEXTURE_CACHE.has(url)) TEXTURE_CACHE.set(url, new THREE.TextureLoader().loadAsync(url).then(texture => {
-    texture.colorSpace = THREE.SRGBColorSpace;
-    texture.flipY = true;
-    return texture;
-  }).catch(error => { TEXTURE_CACHE.delete(url); throw error; }));
-  return TEXTURE_CACHE.get(url);
-}
 const HUMAN_ACTION_CLIPS = {
   IDLE: 'Idle_FoldArms_Loop',
   MOVE: 'Walk_Carry_Loop',
@@ -207,10 +195,10 @@ class ArenaStage {
     this.lowPower = (navigator.hardwareConcurrency || 8) <= 4
       || (navigator.deviceMemory || 8) <= 4
       || window.matchMedia('(max-width: 720px)').matches;
-    // Low-power runners keep the procedural agents responsive while capable
-    // devices upgrade them asynchronously to the external GLTF assets.
-    this.externalAssetsEnabled = this.mode === 'battle' || !this.lowPower;
-    this.animateContinuously = !this.reducedMotion && !this.lowPower;
+    // Battle uses the same local rigged cast as the showcase. The other modes
+    // retain their existing external-model quality profiles.
+    this.externalAssetsEnabled = this.mode !== 'battle' && !this.lowPower;
+    this.animateContinuously = !this.reducedMotion && (this.mode === 'battle' || !this.lowPower);
     this.clock = new THREE.Clock();
     this.pointer = new THREE.Vector2();
     this.lastLabelUpdate = -Infinity;
@@ -219,7 +207,7 @@ class ArenaStage {
     this.cameraFocus = null;
     this.frameCostTotal = 0;
     this.frameCostSamples = 0;
-    this.cameraState = { yaw: 0, pitch: mode === 'battle' ? 0.78 : 0.58, distance: mode === 'battle' ? 28 : mode === 'werewolf' ? 16.5 : 17 };
+    this.cameraState = { yaw: mode === 'battle' ? -.24 : 0, pitch: mode === 'battle' ? .74 : .58, distance: mode === 'battle' ? 26 : mode === 'werewolf' ? 16.5 : 17 };
     this.cameraDefault = { ...this.cameraState };
     this.dragState = null;
     this.init();
@@ -265,10 +253,9 @@ class ArenaStage {
     this.momentCard.dataset.arena3dMoment = '';
     this.host.append(this.momentCard);
 
-    const hemisphere = new THREE.HemisphereLight(0x96cfff, 0x081017, this.mode === 'battle' ? 1.35 : 0.9);
+    const hemisphere = new THREE.HemisphereLight(this.mode === 'battle' ? 0xe4e8da : 0x96cfff, this.mode === 'battle' ? 0x65705d : 0x081017, this.mode === 'battle' ? 1.95 : .9);
     this.scene.add(hemisphere);
-    if (this.mode === 'battle') this.scene.add(new THREE.AmbientLight(0xe8f1ff, 0.7));
-    const key = new THREE.DirectionalLight(this.mode === 'battle' ? 0xffedcf : this.mode === 'werewolf' ? 0xbca4ff : 0xd9f6ff, this.mode === 'battle' ? 3.8 : 3.2);
+    const key = new THREE.DirectionalLight(this.mode === 'battle' ? 0xffdfb8 : this.mode === 'werewolf' ? 0xbca4ff : 0xd9f6ff, this.mode === 'battle' ? 2.8 : 3.2);
     key.position.set(-7, 12, 8);
     key.castShadow = this.shadowsEnabled;
     key.shadow.mapSize.set(512, 512);
@@ -282,7 +269,7 @@ class ArenaStage {
     key.shadow.camera.top = 14;
     key.shadow.camera.bottom = -14;
     this.scene.add(key);
-    const rimLight = new THREE.PointLight(this.mode === 'turing' ? COLORS.lime : COLORS.cyan, 14, 30, 2);
+    const rimLight = this.mode === 'battle' ? new THREE.DirectionalLight(0xb7c8b8, .65) : new THREE.PointLight(this.mode === 'turing' ? COLORS.lime : COLORS.cyan, 14, 30, 2);
     rimLight.position.set(7, 7, -5);
     this.scene.add(rimLight);
 
@@ -303,7 +290,7 @@ class ArenaStage {
     addParticles(
       this.scene,
       this.lowPower ? 72 : this.mode === 'battle' ? 180 : 120,
-      this.mode === 'turing' ? COLORS.lime : 0x75c8dc
+      this.mode === 'battle' ? 0xbcc2a6 : this.mode === 'turing' ? COLORS.lime : 0x75c8dc
     );
 
     this.resizeObserver = new ResizeObserver(() => this.resize());
@@ -311,7 +298,7 @@ class ArenaStage {
     this.bindControls();
     this.updateCamera();
     this.animate();
-    if (!this.reducedMotion) this.queueLatestMoment(true);
+    if (!this.reducedMotion || this.mode === 'battle') this.queueLatestMoment(true);
   }
 
   bindControls() {
@@ -334,6 +321,7 @@ class ArenaStage {
     };
     this.onWheel = (event) => {
       event.preventDefault();
+      this.cancelCameraFocus();
       this.cameraState.distance = THREE.MathUtils.clamp(this.cameraState.distance + event.deltaY * 0.012, 10, 27);
       this.updateCamera();
     };
@@ -356,7 +344,9 @@ class ArenaStage {
       Math.sin(pitch) * distance,
       Math.cos(yaw) * Math.cos(pitch) * distance
     );
+    if (this.mode === 'battle') this.camera.position.add(this.cameraTarget);
     this.camera.lookAt(this.cameraTarget);
+    if (!this.animateContinuously && this.renderer) { this.renderer.render(this.scene, this.camera); this.updateLabels(); }
   }
 
   createLabel(object, player, detail, state = '') {
@@ -376,11 +366,12 @@ class ArenaStage {
       element: button,
       object,
       playerId: String(player.id),
-      offset: this.mode === 'battle' ? 2.65 : 1.65
+      offset: this.mode === 'battle' ? 2.1 : 1.65
     });
   }
 
   createAgent(player, scale = 1, assetKind = 'human') {
+    if (this.mode === 'battle') return this.createBattleSurvivor(player);
     const group = new THREE.Group();
     const active = playerIdEquals(player.id, this.payload.game?.currentActorPlayerId);
     const bodyColor = alive(player) ? colorForSeat(player.seatNo) : 0x313942;
@@ -432,23 +423,7 @@ class ArenaStage {
 
   async attachAgentModel(group, player, scale, assetKind) {
     try {
-      if (this.mode === 'battle') {
-        const [gltf, skin] = await Promise.all([loadGltf(ASSETS.survivor), loadSurvivorSkin(player.seatNo)]);
-        if (this.disposed || !group.parent) return;
-        const model = cloneSkeleton(gltf.scene);
-        this.prepareModel(model, player, scale, 'survivor');
-        model.traverse(object => {
-          if (object.isMesh) {
-            object.material.map = skin;
-            object.material.roughness = 0.86;
-            object.material.metalness = 0;
-            object.material.needsUpdate = true;
-          }
-        });
-        group.add(model);
-        this.configureAgentAnimations(group, model, gltf.animations, 'survivor');
-        this.addSurvivorEquipment(group, player, scale);
-      } else if (assetKind === 'drone') {
+      if (assetKind === 'drone') {
         const gltf = await loadGltf(ASSETS.eyeDrone);
         if (this.disposed || !group.parent || group.userData.desiredAssetKind !== assetKind) return;
         const model = cloneSkeleton(gltf.scene);
@@ -532,11 +507,12 @@ class ArenaStage {
   }
 
   playAgentAction(group, actionType, options = {}) {
-    const state = group?.userData.animation;
-    if (!state && this.mode === 'battle' && group?.userData.model && !this.reducedMotion) {
-      group.userData.model.userData.reaction = { action: actionType, startedAt: this.clock.elapsedTime };
+    if (group?.userData.survivor) {
+      group.userData.survivalAction = { action: actionType, startedAt: this.clock.elapsedTime, duration: options.duration || 2.6 };
+      this.poseBattleSurvivor(group);
       return;
     }
+    const state = group?.userData.animation;
     if (!state || this.reducedMotion) return;
     const map = state.kind === 'drone' ? DRONE_ACTION_CLIPS : HUMAN_ACTION_CLIPS;
     const resolvedType = actionType === 'ATTACK' && group.userData.player?.armed ? 'RANGED_ATTACK' : actionType;
@@ -566,40 +542,35 @@ class ArenaStage {
   }
 
   buildBattle() {
-    this.scene.background = new THREE.Color(0x214651);
-    this.scene.fog.color.set(0x214651);
-    this.scene.fog.density = 0.009;
-    const island = buildBattleIsland(this.scene);
-    const environmentGroups = [island];
-    this.disposables.push(() => {
-      island.userData.groundTexture.dispose();
-      environmentGroups.forEach(group => { group.userData.active = false; (group.userData.textures || []).forEach(texture => texture.dispose()); });
-    });
-    this.host.dataset.arena3dMapStyle = 'survival-island';
+    this.scene.background = new THREE.Color(0x929c90);
+    this.scene.fog.color.set(0x929c90);
+    this.scene.fog.density = .022;
+    this.renderer.toneMappingExposure = 1.06;
+    this.host.classList.add('survival-forest', 'survival-match');
+    this.host.closest('.battle-map')?.classList.add('forest-match-map');
+    this.forest = makeForest(this.scene, [], { battle: true, lowPower: this.lowPower });
+    this.forest.kit.visible = this.forest.ring.visible = false;
+    this.forest.root.traverse(object => { if (object.isMesh) object.castShadow = this.shadowsEnabled; });
+    this.host.dataset.arena3dMapStyle = 'forest-survival';
+    this.host.dataset.arena3dMotion = 'articulated';
     const players = this.payload.players || [];
     const game = this.payload.game || {};
     const events = this.payload.events || [];
     const world = window.BattleWorld.resolve(game, events);
     const safe = new Set(world.safeRegions);
     this.battleDangerMarkers = new Map();
-    const positions = {
-      A: new THREE.Vector3(0, 0.05, 0),
-      B: new THREE.Vector3(-6.2, 0, -4.3),
-      C: new THREE.Vector3(6.2, 0, -4.3),
-      D: new THREE.Vector3(6.2, 0, 4.3),
-      E: new THREE.Vector3(-6.2, 0, 4.3)
-    };
+    const positions = Object.fromEntries(Object.entries(SURVIVAL_REGIONS).map(([region, [x, z]]) => [region, new THREE.Vector3(x, 0, z)]));
     this.battleRegionPositions = positions;
     const supplyRegion = world.supplyDropRegion;
     this.host.dataset.arena3dStage3 = 'social-simulation';
 
     Object.entries(positions).forEach(([region, position]) => {
-      environmentGroups.push(buildBattleSettlement(this.scene, region, position));
+      this.createRegionLabel(region, position);
       {
-        const warning = mesh(new THREE.PlaneGeometry(5.8, 4.8), new THREE.MeshBasicMaterial({ color: COLORS.red, transparent: true, opacity: 0.13, depthWrite: false }), [position.x, 0.39, position.z], [-Math.PI / 2, 0, 0]);
+        const warning = mesh(new THREE.CircleGeometry(2.7, 48), new THREE.MeshBasicMaterial({ color: 0xb57b62, transparent: true, opacity: .24, depthWrite: false }), [position.x, .022, position.z], [-Math.PI / 2, 0, 0]);
         this.scene.add(warning);
-        const storm = new THREE.PointLight(COLORS.red, 2, 6, 2);
-        storm.position.copy(position).add(new THREE.Vector3(0, 2, 0));
+        const storm = ring(2.7, 0xc49c7b, .032, .7);
+        storm.position.copy(position).add(new THREE.Vector3(0, .032, 0));
         this.scene.add(storm);
         warning.visible = storm.visible = !safe.has(region);
         this.battleDangerMarkers.set(region, { warning, storm });
@@ -612,6 +583,7 @@ class ArenaStage {
         this.scene.add(agent);
         const weapon = player.weaponName ? `${player.weaponName} Lv.${Number(player.weaponLevel || 1)}` : '徒手';
         this.createLabel(agent, player, `${weapon} · HP ${player.health ?? '-'}${downed(player) ? ' · 倒地待援' : ''}`, eliminated(player) ? 'eliminated' : '');
+        this.updatePlayerLabel(player);
       });
     });
 
@@ -619,40 +591,52 @@ class ArenaStage {
     this.host.dataset.arena3dSafeRegions = [...safe].sort().join(',');
     this.addCooperativeBeacon(positions.C, events);
     this.addSocialLinks(players, events);
-    Promise.all(environmentGroups.map(group => group.userData.ready)).then(() => {
-      if (this.disposed) return;
-      this.host.dataset.arena3dScenery = 'ready';
-      if (!this.animateContinuously) { this.renderer.render(this.scene, this.camera); this.updateLabels(); }
-    }).catch(error => {
-      if (!this.disposed) this.host.dataset.arena3dScenery = 'degraded';
-      console.warn('[Agent Arena 3D] Scenery asset load failed.', error);
-    });
-
+    this.host.dataset.arena3dScenery = 'ready';
   }
 
-  addSurvivorEquipment(group, player, scale) {
-    const previous = group.userData.equipment;
-    if (previous) {
-      previous.removeFromParent();
-      previous.traverse(object => { object.geometry?.dispose(); object.material?.dispose(); });
+  createBattleSurvivor(player) {
+    const group = new THREE.Group(), survivor = createSurvivor(group, player);
+    const pulse = ring(.55, 0xc9d4ab, .035, .72);
+    pulse.visible = alive(player) && playerIdEquals(player.id, this.payload.game?.currentActorPlayerId);
+    group.add(pulse);
+    survivor.root.traverse(object => { if (object.isMesh) object.castShadow = this.shadowsEnabled; });
+    Object.assign(group.userData, { player: { ...player }, survivor, pulse, model: survivor.root, scale: 1,
+      assetReady: true, assetKind: 'forest-survivor', survivalAction: { action: 'IDLE', startedAt: 0, duration: 0 } });
+    this.agents.set(String(player.id), group);
+    this.loadedAssetCount++;
+    this.host.dataset.arena3dAssets = String(this.loadedAssetCount);
+    this.host.dataset.arena3dAssetMode = 'procedural-rigged';
+    this.host.dataset.arena3dBattleStyle = 'forest-survivors';
+    this.poseBattleSurvivor(group);
+    return group;
+  }
+
+  poseBattleSurvivor(group) {
+    const survivor = group.userData.survivor;
+    if (!survivor) return;
+    survivor.player = group.userData.player;
+    const state = group.userData.survivalAction || {}, elapsed = this.clock.elapsedTime;
+    const time = Math.max(0, elapsed - (state.startedAt || 0));
+    const action = this.reducedMotion || time < state.duration ? state.action : 'IDLE';
+    poseSurvivor(survivor, { action, time, elapsed, duration: state.duration, reducedMotion: this.reducedMotion,
+      recovery: group.userData.recoveredAt == null ? null : (elapsed - group.userData.recoveredAt) / 1.8 });
+    if (group.userData.renderedStatus !== survivor.player.status) {
+      survivor.root.traverse(object => {
+        if (!object.material?.color) return;
+        object.material.userData.clothColor ||= object.material.color.clone();
+        object.material.color.copy(object.material.userData.clothColor).multiplyScalar(eliminated(survivor.player) ? .5 : 1);
+      });
+      group.userData.renderedStatus = survivor.player.status;
     }
-    const equipment = new THREE.Group();
-    const accent = colorForSeat(player.seatNo);
-    equipment.add(mesh(new THREE.BoxGeometry(0.36, 0.5, 0.2), material(0x283d49, { roughness: 0.9 }), [0, 1.02, -0.23]));
-    equipment.add(mesh(new THREE.BoxGeometry(0.3, 0.12, 0.025), material(accent, { emissive: accent, emissiveIntensity: 0.2 }), [0, 1.16, -0.34]));
-    if (player.armed || player.weaponName) {
-      const gun = new THREE.Group();
-      gun.add(mesh(new THREE.BoxGeometry(0.11, 0.14, 0.55), material(0x26343d), [0, 0, 0]));
-      gun.add(mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.3, 8), material(0x111d26), [0, 0.025, 0.4], [Math.PI / 2, 0, 0]));
-      gun.add(mesh(new THREE.BoxGeometry(0.07, 0.2, 0.1), material(accent), [0, -0.12, -0.04]));
-      gun.position.set(0.4, 0.88, 0.16);
-      equipment.add(gun);
-    }
-    equipment.scale.setScalar(scale * 1.2);
-    group.add(equipment);
-    group.userData.equipment = equipment;
-    group.userData.equipmentSignature = `${Boolean(player.armed)}:${player.weaponName || ''}`;
-    this.host.dataset.arena3dBattleStyle = 'survivors';
+    group.userData.renderedAction = alive(survivor.player) ? action : survivor.player.status;
+  }
+
+  createRegionLabel(region, position) {
+    const marker = document.createElement('span'); marker.className = 'survival-region-label';
+    const profiles = window.BattleWorld.resolve(this.payload.game, this.payload.events).regionProfiles;
+    const names = Object.fromEntries(Object.entries(profiles).map(([key, value]) => [key, value.name]));
+    marker.textContent = `${region} · ${names[region]}`; this.labelLayer.append(marker);
+    this.regionLabels ||= []; this.regionLabels.push({ element: marker, position: position.clone().add(new THREE.Vector3(0, .04, -1.8)) });
   }
 
   addCooperativeBeacon(position, events) {
@@ -660,14 +644,19 @@ class ArenaStage {
     const contribution = latest(events, (event) => event.eventType === 'BATTLE_OBJECTIVE_CONTRIBUTED');
     const group = new THREE.Group();
     group.position.copy(position).add(new THREE.Vector3(0, 0.48, 0));
-    const color = complete ? COLORS.lime : COLORS.cyan;
-    const core = mesh(new THREE.OctahedronGeometry(0.42, 0), material(color, { emissive: color, emissiveIntensity: complete ? 2.1 : 1.1 }), [0, 1.1, 0]);
-    const beam = mesh(new THREE.CylinderGeometry(0.04, 0.25, complete ? 7 : 3.6, 14, 1, true), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: complete ? 0.3 : 0.12, side: THREE.DoubleSide }), [0, complete ? 4.1 : 2.4, 0]);
-    beam.userData.pulse = true; group.add(core, beam); this.scene.add(group); this.animated.push(core, beam);
+    group.position.add(new THREE.Vector3(-1.8, -.48, -1.8));
+    const color = complete ? 0xc5cea1 : 0x8b9a79;
+    const core = mesh(new THREE.BoxGeometry(.42, .5, .28), material(0x4d5b47, { roughness: .95, metalness: .05 }), [0, .75, 0]);
+    const mast = mesh(new THREE.CylinderGeometry(.025, .04, 2.7, 8), material(0x726d54, { roughness: .9 }), [0, 1.35, 0]);
+    const flag = mesh(new THREE.PlaneGeometry(.65, .35), new THREE.MeshStandardMaterial({ color, side: THREE.DoubleSide, roughness: .95 }), [.33, 2.3, 0]);
+    group.add(core, mast, flag); this.scene.add(group);
+    this.cooperativeBeacon = group; group.userData.flag = flag;
     group.userData.objective = contribution?.payload?.objectiveId || 'public-beacon';
   }
 
   addSocialLinks(players, events) {
+    this.socialLinks?.forEach(link => { link.removeFromParent(); link.geometry.dispose(); link.material.dispose(); });
+    this.socialLinks = [];
     const active = new Map();
     (events || []).forEach((event) => {
       const a = event.payload?.memberAPlayerId ?? event.payload?.proposerPlayerId;
@@ -679,76 +668,29 @@ class ArenaStage {
     });
     active.forEach(([a, b]) => {
       const pa = players.find((p) => playerIdEquals(p.id, a)); const pb = players.find((p) => playerIdEquals(p.id, b));
-      if (!pa || !pb) return;
+      if (!pa || !pb || !pa.region || !pb.region || eliminated(pa) || eliminated(pb)) return;
       const start = this.battlePositionForPlayer(pa, players).add(new THREE.Vector3(0, 1, 0));
       const end = this.battlePositionForPlayer(pb, players).add(new THREE.Vector3(0, 1, 0));
-      const link = lineBetween(start, end, COLORS.lime, 0.34); this.scene.add(link);
+      const link = lineBetween(start, end, 0xb5c69c, .22); this.scene.add(link); this.socialLinks.push(link);
     });
   }
 
   battlePositionForPlayer(player, players = this.payload.players || []) {
     const regionPosition = this.battleRegionPositions?.[player?.region];
-    if (!regionPosition) return new THREE.Vector3(0, 0.36, 0);
+    if (!regionPosition) return new THREE.Vector3(0, 0, 0);
     const occupants = players.filter((candidate) => candidate.region === player.region);
     const index = Math.max(0, occupants.findIndex((candidate) => playerIdEquals(candidate.id, player.id)));
     const angle = (Math.PI * 2 * index) / Math.max(occupants.length, 1);
-    return regionPosition.clone().add(new THREE.Vector3(Math.cos(angle) * 1.15, 0.36, Math.sin(angle) * 1.15));
-  }
-
-  regionGlyph(region, position, radius) {
-    const group = new THREE.Group();
-    group.position.copy(position);
-    group.position.y = 0.37;
-    const halo = ring(radius * 0.87, region === 'A' ? COLORS.lime : COLORS.cyan, 0.02, 0.22);
-    group.add(halo);
-    const marker = mesh(new THREE.CylinderGeometry(0.28, 0.35, 0.08, 12), material(region === 'A' ? COLORS.lime : COLORS.cyan, {
-      emissive: region === 'A' ? COLORS.lime : COLORS.cyan, emissiveIntensity: 1.1
-    }), [0, 0.08, 0]);
-    group.add(marker);
-    return group;
-  }
-
-  addRegionScenery(region, origin) {
-    const group = new THREE.Group();
-    group.position.copy(origin);
-    if (region === 'B') {
-      for (let index = 0; index < 8; index += 1) {
-        const angle = index * 2.39;
-        const tree = new THREE.Group();
-        tree.add(mesh(new THREE.CylinderGeometry(0.06, 0.09, 0.65, 7), material(0x513b2c), [0, 0.34, 0]));
-        tree.add(mesh(new THREE.ConeGeometry(0.32, 0.9, 8), material(0x2c7a58), [0, 0.95, 0]));
-        tree.position.set(Math.cos(angle) * 1.85, 0.25, Math.sin(angle) * 1.85);
-        group.add(tree);
-      }
-    } else if (region === 'C') {
-      for (let index = -2; index <= 2; index += 1) {
-        group.add(mesh(new THREE.BoxGeometry(0.18, 0.16, 1.4), material(0x506a73), [index * 0.42, 0.37, -1.55]));
-      }
-    } else if (region === 'D') {
-      group.add(mesh(new THREE.BoxGeometry(3.1, 0.55, 0.34), material(0x756653), [0, 0.55, -1.65]));
-      group.add(mesh(new THREE.BoxGeometry(0.4, 1.1, 2.7), material(0x63594e), [-1.55, 0.72, 0]));
-    } else if (region === 'E') {
-      const tent = mesh(new THREE.ConeGeometry(0.9, 1.25, 4), material(0x6c8050), [0, 0.95, -1.25], [0, Math.PI / 4, 0]);
-      group.add(tent);
-    } else {
-      for (let index = 0; index < 6; index += 1) {
-        group.add(mesh(new THREE.BoxGeometry(0.45, 0.35 + (index % 3) * 0.28, 0.45), material(0x5c6870), [
-          Math.cos(index) * 2.1, 0.55, Math.sin(index) * 2.1
-        ], [0, index * 0.47, 0]));
-      }
-    }
-    this.scene.add(group);
+    return regionPosition.clone().add(new THREE.Vector3(Math.cos(angle) * 1.15, 0, Math.sin(angle) * 1.15));
   }
 
   addSupplyBeacon(position) {
     const group = new THREE.Group();
     group.position.copy(position).add(new THREE.Vector3(0, 0.45, 0));
-    const crate = mesh(new THREE.BoxGeometry(0.75, 0.55, 0.75), material(COLORS.amber, {
-      emissive: COLORS.amber, emissiveIntensity: 0.5
-    }), [0, 0.35, 0]);
-    const beam = mesh(new THREE.CylinderGeometry(0.06, 0.42, 8, 16, 1, true), new THREE.MeshBasicMaterial({
-      color: COLORS.amber, transparent: true, opacity: 0.15, side: THREE.DoubleSide, depthWrite: false
-    }), [0, 4.3, 0]);
+    const crate = mesh(new THREE.BoxGeometry(.75, .55, .75), material(0x9c8962, { roughness: .95, metalness: 0 }), [0, .35, 0]);
+    const beam = mesh(new THREE.CylinderGeometry(.18, .07, 4.5, 12, 1, true), new THREE.MeshBasicMaterial({
+      color: 0xc8b793, transparent: true, opacity: .12, side: THREE.DoubleSide, depthWrite: false
+    }), [0, 2.6, 0]);
     beam.userData.pulse = true;
     group.add(crate, beam);
     this.scene.add(group);
@@ -977,22 +919,33 @@ class ArenaStage {
   }
 
   update(payload = {}) {
-    if (this.disposed) return;
+    if (this.disposed || !this.renderer) return;
     this.payload = payload;
     this.host.closest('.battle-map, .werewolf-arena, .turing-stage-main')?.classList.add('arena3d-active');
+    if (this.mode === 'battle') this.host.closest('.battle-map')?.classList.add('forest-match-map');
     const players = payload.players || [];
     players.forEach((player) => {
-      const group = this.agents.get(String(player.id));
+      let group = this.agents.get(String(player.id));
+      if (!group && this.mode === 'battle' && this.battleRegionPositions[player.region]) {
+        group = this.createBattleSurvivor(player); group.position.copy(this.battlePositionForPlayer(player, players));
+        this.scene.add(group); this.createLabel(group, player, '');
+      }
       if (!group) return;
       const previous = group.userData.player || {};
-      group.userData.player = player;
+      group.userData.player = this.mode === 'battle' ? { ...player } : player;
       group.userData.pulse.visible = alive(player) && playerIdEquals(player.id, payload.game?.currentActorPlayerId);
       if (group.userData.base?.material) {
         const accent = colorForSeat(player.seatNo);
         group.userData.base.material.emissive.setHex(accent);
         group.userData.base.material.emissiveIntensity = group.userData.pulse.visible ? 0.85 : 0.18;
       }
-      if (alive(previous) && downed(player)) {
+      if (this.mode === 'battle') {
+        group.visible = Boolean(this.battleRegionPositions[player.region]);
+        group.rotation.z = 0;
+        if (downed(previous) && alive(player)) group.userData.recoveredAt = this.clock.elapsedTime;
+        else if (!alive(player)) delete group.userData.recoveredAt;
+        this.poseBattleSurvivor(group);
+      } else if (alive(previous) && downed(player)) {
         this.playAgentAction(group, 'HIT', { duration: 1 });
         this.addTimer(() => { if (!this.disposed) { group.rotation.z = 0.32; group.position.y -= 0.22; } }, 520);
       } else if (!eliminated(previous) && eliminated(player)) {
@@ -1002,11 +955,11 @@ class ArenaStage {
         group.rotation.z = 0;
       }
       if (this.mode === 'battle') {
-        if (group.userData.model && group.userData.equipmentSignature !== `${Boolean(player.armed)}:${player.weaponName || ''}`) {
-          this.addSurvivorEquipment(group, player, group.userData.scale || 1);
-        }
         const target = this.battlePositionForPlayer(player, players);
-        if (group.position.distanceTo(target) > 0.08) this.tweenAgent(group, target, 1.35);
+        const moving = this.positionTweens.find(tween => tween.group === group);
+        if (group.visible && group.position.distanceTo(target) > .08 && (!moving || moving.target.distanceTo(target) > .08)) {
+          this.tweenAgent(group, target, THREE.MathUtils.clamp(group.position.distanceTo(target) / 3.5, 1, 3.4));
+        }
       }
       if (this.mode === 'turing') {
         const revealed = payload.game?.identitiesRevealed || payload.game?.status === 'FINISHED';
@@ -1025,6 +978,12 @@ class ArenaStage {
       this.updateSupplyBeacon(world.supplyDropRegion);
       this.battleDangerMarkers?.forEach(({ warning, storm }, region) => { warning.visible = storm.visible = !safe.has(region); });
       this.host.dataset.arena3dSafeRegions = [...safe].sort().join(',');
+      this.addSocialLinks(players, payload.events);
+      const complete = Boolean(latest(payload.events, event => event.eventType === 'BATTLE_OBJECTIVE_COMPLETED'));
+      this.cooperativeBeacon?.userData.flag.material.color.setHex(complete ? 0xc5cea1 : 0x8b9a79);
+      this.agents.forEach((group, id) => {
+        if (!players.some(player => String(player.id) === id)) group.visible = false;
+      });
     }
     this.queueLatestMoment(false);
     this.resize();
@@ -1040,7 +999,10 @@ class ArenaStage {
     const small = label.element.querySelector('small');
     if (this.mode === 'battle' && small) {
       const weapon = player.weaponName ? `${player.weaponName} Lv.${Number(player.weaponLevel || 1)}` : '徒手';
-      small.textContent = `${weapon} · HP ${player.health ?? '-'}`;
+      small.textContent = downed(player) ? '倒地待援' : eliminated(player) ? '已淘汰' : `${weapon} · HP ${player.health ?? '-'}`;
+      label.element.classList.toggle('downed', downed(player));
+      label.element.dataset.playerStatus = player.status;
+      label.element.setAttribute('aria-label', `${player.displayName} · ${small.textContent}`);
     } else if (this.mode === 'werewolf' && small) {
       const situation = this.payload.projection?.werewolfSituation || {};
       const stance = (situation.players || []).find((item) => Number(item.seatNo) === Number(player.seatNo));
@@ -1122,7 +1084,7 @@ class ArenaStage {
   }
 
   performMoment(event, initial = false) {
-    if (this.disposed || this.reducedMotion) return;
+    if (this.disposed || this.reducedMotion && this.mode !== 'battle') return;
     const actor = this.agents.get(String(event.actorPlayerId));
     if (!actor?.userData.assetReady) {
       this.pendingMoment = event;
@@ -1130,19 +1092,25 @@ class ArenaStage {
     }
     const action = this.actionForEvent(event);
     this.playAgentAction(actor, action);
-    const target = this.agents.get(String(event.payload?.targetPlayerId));
-    if (target && action === 'ATTACK') {
+    const targetId = event.payload?.targetPlayerId ?? (this.mode === 'battle' && ['REVIVE', 'EXECUTE'].includes(action) ? event.payload?.playerId : null);
+    const target = this.agents.get(String(targetId));
+    if (!initial) this.host.dataset.arena3dLastEvent = String(eventSequence(event));
+    if (this.mode === 'battle') this.host.dataset.arena3dAction = action;
+    if (target?.visible && ['ATTACK', 'REVIVE', 'EXECUTE', 'TRADE', 'INFO_TRADE'].includes(action)) {
       const targetPosition = new THREE.Vector3();
       target.getWorldPosition(targetPosition);
       actor.lookAt(targetPosition.x, actor.position.y, targetPosition.z);
-      this.addTimer(() => {
-        if (!this.disposed) this.playAgentAction(target, 'HIT', { duration: 0.9 });
+      if (action === 'ATTACK' && !this.reducedMotion) this.addTimer(() => {
+        if (!this.disposed) this.playAgentAction(target, 'HIT', { duration: .9 });
       }, 360);
     }
+    if (!actor.visible || this.reducedMotion) {
+      if (this.reducedMotion) { this.updateLabels(); this.renderer.render(this.scene, this.camera); }
+      return;
+    }
     this.showMomentCard(event, action);
-    this.focusOn(actor, target);
-    this.addActionEffect(actor, target, action);
-    if (!initial) this.host.dataset.arena3dLastEvent = String(eventSequence(event));
+    this.focusOn(actor, target?.visible ? target : null);
+    this.addActionEffect(actor, target?.visible ? target : null, action);
   }
 
   showMomentCard(event, action) {
@@ -1181,13 +1149,13 @@ class ArenaStage {
       target.getWorldPosition(targetPosition);
       targetPosition.y += 0.9;
       const start = actorPosition.clone().add(new THREE.Vector3(0, 0.8, 0));
-      const beam = lineBetween(start, targetPosition, COLORS.red, 1);
+      const beam = lineBetween(start, targetPosition, this.mode === 'battle' ? 0xd1b38c : COLORS.red, this.mode === 'battle' ? .6 : 1);
       this.scene.add(beam);
       this.addTransient(beam, 0.85, (progress) => {
         beam.material.opacity = 1 - progress;
         beam.scale.setScalar(1 + Math.sin(progress * Math.PI) * 0.025);
       });
-      this.pulseAt(targetPosition, COLORS.red, 1.1);
+      this.pulseAt(targetPosition, this.mode === 'battle' ? 0xb77e62 : COLORS.red, 1.1);
       return;
     }
     const colors = {
@@ -1203,14 +1171,16 @@ class ArenaStage {
       ,REVIVE: COLORS.green, EXECUTE: COLORS.red, CONTRIBUTE: COLORS.cyan,
       RUMOR: COLORS.violet, INFO_TRADE: COLORS.amber
     };
-    this.pulseAt(actorPosition, colors[action] || COLORS.lime, action === 'SEARCH' ? 1.55 : 1.15);
+    const forestColors = { REVIVE: 0xb9c89a, HEAL: 0xb9c89a, SEARCH: 0xc6bc98, GUARD: 0xa9baa0, HIDE: 0x889b79 };
+    this.pulseAt(actorPosition, this.mode === 'battle' ? forestColors[action] || 0xb8b296 : colors[action] || COLORS.lime, action === 'SEARCH' ? 1.55 : 1.15);
   }
 
   pulseAt(position, color, radius = 1.2) {
     const group = new THREE.Group();
     group.position.copy(position);
-    for (let index = 0; index < 3; index += 1) {
+    for (let index = 0; index < (this.mode === 'battle' ? 1 : 3); index += 1) {
       const wave = ring(radius * (0.45 + index * 0.18), color, index * 0.05, 0.9 - index * 0.18);
+      if (this.mode === 'battle') wave.material.opacity = .3;
       wave.userData.baseOpacity = wave.material.opacity;
       group.add(wave);
     }
@@ -1279,13 +1249,14 @@ class ArenaStage {
     const width = Math.max(1, this.host.clientWidth);
     const height = Math.max(1, this.host.clientHeight);
     if (width <= 720 && !this.mobileCameraApplied) {
-      const multiplier = this.mode === 'werewolf' ? 1.48 : this.mode === 'turing' ? 1.16 : 1.18;
+      const multiplier = this.mode === 'werewolf' ? 1.48 : this.mode === 'turing' ? 1.16 : .96;
       this.cameraState.distance *= multiplier;
       this.cameraDefault.distance *= multiplier;
+      if (this.mode === 'battle') this.cameraState.pitch = this.cameraDefault.pitch = .92;
       this.mobileCameraApplied = true;
       this.updateCamera();
     }
-    this.camera.fov = this.mode === 'battle' ? (width <= 720 ? 58 : 42) : width <= 720 && this.mode === 'werewolf' ? 50 : 38;
+    this.camera.fov = this.mode === 'battle' ? (width <= 720 ? 54 : 42) : width <= 720 && this.mode === 'werewolf' ? 50 : 38;
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(width, height, false);
@@ -1302,15 +1273,22 @@ class ArenaStage {
     this.labels.forEach(({ element, object, offset }) => {
       const position = new THREE.Vector3();
       object.getWorldPosition(position);
-      position.y += offset;
+      const player = object.userData.player;
+      position.y += this.mode === 'battle' && !alive(player) ? .6 : offset;
       position.project(this.camera);
-      const visible = position.z > -1 && position.z < 1;
+      const visible = object.visible && position.z > -1 && position.z < 1 && Math.abs(position.x) < 1.08 && Math.abs(position.y) < 1.08;
       const labelMargin = element.classList.contains('active') && width <= 720 ? 54 : 18;
       const x = THREE.MathUtils.clamp((position.x * 0.5 + 0.5) * width, labelMargin, width - labelMargin);
       const y = THREE.MathUtils.clamp((-position.y * 0.5 + 0.5) * height, 30, height - 6);
       element.style.transform = `translate3d(${x}px, ${y}px, 0) translate(-50%, -100%)`;
       element.style.opacity = visible ? '1' : '0';
+      element.style.visibility = visible ? 'visible' : 'hidden';
       element.style.pointerEvents = visible ? 'auto' : 'none';
+    });
+    this.regionLabels?.forEach(({ element, position }) => {
+      const projected = position.clone().project(this.camera);
+      element.style.transform = `translate(${(projected.x * .5 + .5) * width}px,${(-projected.y * .5 + .5) * height}px) translate(-50%,-50%)`;
+      element.hidden = projected.z < -1 || projected.z > 1 || Math.abs(projected.x) > 1 || Math.abs(projected.y) > 1;
     });
   }
 
@@ -1324,19 +1302,17 @@ class ArenaStage {
       this.animationFrame = requestAnimationFrame(() => this.animate());
       return;
     }
+    if (this.mode === 'battle' && this.lowPower && performance.now() - (this.lastRenderAt || 0) < 32) {
+      this.animationFrame = requestAnimationFrame(() => this.animate()); return;
+    }
+    this.lastRenderAt = performance.now();
     const frameStartedAt = performance.now();
     const delta = Math.min(0.05, this.clock.getDelta());
     const elapsed = this.clock.elapsedTime;
     if (!this.reducedMotion) {
       this.mixers.forEach((mixer) => mixer.update(delta));
       this.agents.forEach((group) => {
-        const model = group.userData.model;
-        if (this.mode === 'battle' && model?.userData.reaction) {
-          const reaction = model.userData.reaction;
-          const progress = Math.min(1, (elapsed - reaction.startedAt) / 0.65);
-          model.rotation.x = Math.sin(progress * Math.PI) * (reaction.action === 'HIT' ? 0.18 : reaction.action === 'ATTACK' ? -0.16 : 0);
-          if (progress === 1) delete model.userData.reaction;
-        }
+        if (group.userData.survivor) this.poseBattleSurvivor(group);
         const state = group.userData.animation;
         if (state?.resumeAt > 0 && elapsed >= state.resumeAt) {
           state.resumeAt = 0;
@@ -1391,6 +1367,7 @@ class ArenaStage {
       this.scene.children.filter((item) => item.userData.particles).forEach((points) => {
         points.rotation.y = elapsed * 0.012;
       });
+      this.forest?.foliage.forEach(({ tree, phase }) => { tree.rotation.z = Math.sin(elapsed * .65 + phase) * .006; });
     }
     if (this.cameraFocus || this.positionTweens.length || elapsed - this.lastLabelUpdate >= 0.05) {
       this.updateLabels();
@@ -1423,11 +1400,18 @@ class ArenaStage {
     this.host?.removeEventListener('wheel', this.onWheel);
     this.mixers.forEach((mixer) => mixer.stopAllAction());
     this.mixers.length = 0;
+    const textures = new Set();
     this.scene?.traverse((object) => {
+      if (object.isInstancedMesh) object.dispose();
       if (!object.userData.externalAsset) object.geometry?.dispose?.();
+      if (this.mode === 'battle') {
+        [object.material].flat().filter(Boolean).forEach(value => Object.values(value).forEach(item => { if (item?.isTexture) textures.add(item); }));
+      }
       if (Array.isArray(object.material)) object.material.forEach((value) => value.dispose?.());
       else object.material?.dispose?.();
     });
+    textures.forEach(texture => texture.dispose());
+    this.host?.classList.remove('survival-forest', 'survival-match');
     this.renderer?.dispose();
     this.renderer?.forceContextLoss?.();
   }
